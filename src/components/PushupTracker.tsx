@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,22 +105,42 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   const enableCamera = useCallback(async () => {
     try {
+      console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
-          width: 640, 
-          height: 480,
+          width: { ideal: 640 }, 
+          height: { ideal: 480 },
           facingMode: 'user'
         }
       });
       
+      console.log('Camera stream obtained:', stream);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
-        setCameraEnabled(true);
-        toast({
-          title: "Kamera aktiviert",
-          description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-        });
+        
+        // Ensure video plays when metadata is loaded
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded, attempting to play...');
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log('Video playing successfully');
+              setCameraEnabled(true);
+              toast({
+                title: "Kamera aktiviert",
+                description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+              });
+            }).catch((error) => {
+              console.error('Video play error:', error);
+              toast({
+                title: "Video-Fehler",
+                description: "Konnte Video nicht abspielen. Bitte versuche es erneut.",
+                variant: "destructive",
+              });
+            });
+          }
+        };
       }
     } catch (error) {
       console.error('Camera access error:', error);
@@ -137,6 +156,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraEnabled(false);
     setIsTracking(false);
@@ -250,7 +272,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transform scale-x-[-1]"
+                  style={{ transform: 'scaleX(-1)' }}
                 />
                 <canvas
                   ref={canvasRef}
