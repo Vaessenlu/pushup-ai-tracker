@@ -120,38 +120,30 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
-        // Set camera enabled immediately and try to play
-        setCameraEnabled(true);
-        
-        // Force play the video
-        const playVideo = async () => {
-          try {
-            console.log('Attempting to play video...');
-            await videoRef.current!.play();
-            console.log('Video is now playing');
-            toast({
-              title: "Kamera aktiviert",
-              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+        // Wait for video to be ready and then play
+        const setupVideo = () => {
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log('Video is now playing');
+              setCameraEnabled(true);
+              toast({
+                title: "Kamera aktiviert",
+                description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+              });
+            }).catch((error) => {
+              console.error('Video play failed:', error);
+              setCameraEnabled(false);
             });
-          } catch (error) {
-            console.error('Video play failed:', error);
-            // Try again after a short delay
-            setTimeout(() => {
-              if (videoRef.current) {
-                videoRef.current.play().catch(console.error);
-              }
-            }, 100);
           }
         };
 
-        // Try to play immediately
-        playVideo();
+        // Set up event listener for when video is ready
+        videoRef.current.onloadedmetadata = setupVideo;
         
-        // Also set up the loadedmetadata event as fallback
-        videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata loaded');
-          playVideo();
-        };
+        // Also try immediately in case metadata is already loaded
+        if (videoRef.current.readyState >= 1) {
+          setupVideo();
+        }
       }
     } catch (error) {
       console.error('Camera access error:', error);
@@ -277,7 +269,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         {/* Camera Section */}
         <div className="relative">
           <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
-            {cameraEnabled ? (
+            {cameraEnabled && streamRef.current ? (
               <>
                 <video
                   ref={videoRef}
@@ -285,7 +277,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   playsInline
                   muted
                   className="w-full h-full object-cover transform scale-x-[-1]"
-                  style={{ transform: 'scaleX(-1)' }}
                 />
                 <canvas
                   ref={canvasRef}
