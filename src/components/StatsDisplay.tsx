@@ -80,7 +80,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
               <p className="text-2xl font-bold">{bestSession}</p>
             </div>
           </div>
-        </div>
+        </Card>
 
         <Card className="p-6 bg-gradient-to-br from-purple-500 to-purple-600 text-white">
           <div className="flex items-center gap-3">
