@@ -120,30 +120,42 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
-        // Ensure video plays when metadata is loaded
-        videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata loaded, attempting to play...');
-          if (videoRef.current) {
-            videoRef.current.play().then(() => {
-              console.log('Video playing successfully');
-              setCameraEnabled(true);
-              toast({
-                title: "Kamera aktiviert",
-                description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-              });
-            }).catch((error) => {
-              console.error('Video play error:', error);
-              toast({
-                title: "Video-Fehler",
-                description: "Konnte Video nicht abspielen. Bitte versuche es erneut.",
-                variant: "destructive",
-              });
+        // Set camera enabled immediately and try to play
+        setCameraEnabled(true);
+        
+        // Force play the video
+        const playVideo = async () => {
+          try {
+            console.log('Attempting to play video...');
+            await videoRef.current!.play();
+            console.log('Video is now playing');
+            toast({
+              title: "Kamera aktiviert",
+              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
             });
+          } catch (error) {
+            console.error('Video play failed:', error);
+            // Try again after a short delay
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(console.error);
+              }
+            }, 100);
           }
+        };
+
+        // Try to play immediately
+        playVideo();
+        
+        // Also set up the loadedmetadata event as fallback
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
+          playVideo();
         };
       }
     } catch (error) {
       console.error('Camera access error:', error);
+      setCameraEnabled(false);
       toast({
         title: "Kamera-Fehler",
         description: "Konnte nicht auf die Kamera zugreifen. Bitte Berechtigung erteilen.",
