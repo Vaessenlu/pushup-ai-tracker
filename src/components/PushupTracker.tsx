@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,8 +101,47 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [sessionTime, setSessionTime] = useState(0);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [status, setStatus] = useState<'ready' | 'tracking' | 'paused'>('ready');
+  const [videoReady, setVideoReady] = useState(false);
   
   const { toast } = useToast();
+
+  // Separate useEffect to handle video stream assignment
+  useEffect(() => {
+    if (streamRef.current && videoRef.current && cameraEnabled) {
+      console.log('Assigning stream to video element...');
+      
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      
+      const handleLoadedMetadata = () => {
+        console.log('Video metadata loaded, starting playback...');
+        video.play()
+          .then(() => {
+            console.log('Video playback started successfully');
+            setVideoReady(true);
+            toast({
+              title: "Kamera aktiviert",
+              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+            });
+          })
+          .catch((error) => {
+            console.error('Video play failed:', error);
+            setVideoReady(false);
+          });
+      };
+
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      // If metadata is already loaded
+      if (video.readyState >= 1) {
+        handleLoadedMetadata();
+      }
+
+      return () => {
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      };
+    }
+  }, [cameraEnabled, toast]);
 
   const enableCamera = useCallback(async () => {
     try {
@@ -114,52 +154,14 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         }
       });
       
-      console.log('Camera stream obtained:', stream);
+      console.log('Camera stream obtained successfully');
       streamRef.current = stream;
+      setCameraEnabled(true);
       
-      if (videoRef.current) {
-        console.log('Setting video source to video element...');
-        videoRef.current.srcObject = stream;
-        
-        // Wait for the video to load metadata, then play and enable UI
-        videoRef.current.onloadedmetadata = async () => {
-          console.log('Video metadata loaded, attempting to play...');
-          if (videoRef.current) {
-            try {
-              await videoRef.current.play();
-              console.log('Video is now playing successfully');
-              setCameraEnabled(true);
-              toast({
-                title: "Kamera aktiviert",
-                description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-              });
-            } catch (playError) {
-              console.error('Video play error:', playError);
-              setCameraEnabled(false);
-            }
-          }
-        };
-
-        // Also handle if metadata is already loaded
-        if (videoRef.current.readyState >= 1) {
-          console.log('Video metadata already available, playing immediately...');
-          try {
-            await videoRef.current.play();
-            console.log('Video is now playing successfully (immediate)');
-            setCameraEnabled(true);
-            toast({
-              title: "Kamera aktiviert",
-              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-            });
-          } catch (playError) {
-            console.error('Video play error (immediate):', playError);
-            setCameraEnabled(false);
-          }
-        }
-      }
     } catch (error) {
       console.error('Camera access error:', error);
       setCameraEnabled(false);
+      setVideoReady(false);
       streamRef.current = null;
       toast({
         title: "Kamera-Fehler",
@@ -182,15 +184,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       videoRef.current.srcObject = null;
     }
     setCameraEnabled(false);
+    setVideoReady(false);
     setIsTracking(false);
     setStatus('ready');
   }, [setIsTracking]);
 
   const startTracking = useCallback(() => {
-    if (!cameraEnabled) {
+    if (!cameraEnabled || !videoReady) {
       toast({
         title: "Kamera erforderlich",
-        description: "Bitte aktiviere zuerst die Kamera.",
+        description: "Bitte aktiviere zuerst die Kamera und warte bis das Video geladen ist.",
         variant: "destructive",
       });
       return;
@@ -207,7 +210,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       title: "Tracking gestartet",
       description: "Beginne mit deinen Liegestützen!",
     });
-  }, [cameraEnabled, setIsTracking, toast]);
+  }, [cameraEnabled, videoReady, setIsTracking, toast]);
 
   const pauseTracking = useCallback(() => {
     setIsTracking(false);
@@ -241,7 +244,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if (isTracking && videoRef.current && cameraEnabled) {
+    if (isTracking && videoRef.current && videoReady) {
       const animate = () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = detectorRef.current.detect(videoRef.current);
@@ -265,7 +268,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, cameraEnabled]);
+  }, [isTracking, videoReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -286,7 +289,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         {/* Camera Section */}
         <div className="relative">
           <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
-            {cameraEnabled && streamRef.current ? (
+            {cameraEnabled ? (
               <>
                 <video
                   ref={videoRef}
@@ -294,7 +297,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   playsInline
                   muted
                   className="w-full h-full object-cover transform scale-x-[-1]"
-                  style={{ display: 'block' }}
                 />
                 <canvas
                   ref={canvasRef}
@@ -305,6 +307,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant={status === 'tracking' ? 'default' : 'secondary'}>
                     {status === 'tracking' ? 'Tracking aktiv' : 
                      status === 'paused' ? 'Pausiert' : 'Bereit'}
+                  </Badge>
+                  <Badge variant="outline" className="bg-white/90">
+                    Video: {videoReady ? 'Bereit' : 'Lädt...'}
                   </Badge>
                   {isTracking && (
                     <Badge variant="outline" className="bg-white/90">
@@ -352,13 +357,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 Kamera aus
               </Button>
               
-              {status === 'ready' && (
+              {status === 'ready' && videoReady && (
                 <Button 
                   onClick={startTracking}
                   className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
                   Start
+                </Button>
+              )}
+              
+              {status === 'ready' && !videoReady && (
+                <Button 
+                  disabled
+                  variant="outline"
+                >
+                  Video lädt...
                 </Button>
               )}
               
