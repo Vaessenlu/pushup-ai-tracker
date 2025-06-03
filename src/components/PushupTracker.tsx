@@ -115,39 +115,35 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       });
       
       console.log('Camera stream obtained:', stream);
+      streamRef.current = stream;
       
       if (videoRef.current) {
+        console.log('Setting video source...');
         videoRef.current.srcObject = stream;
-        streamRef.current = stream;
         
-        // Wait for video to be ready and then play
-        const setupVideo = () => {
+        // Set camera enabled immediately so UI shows the video
+        setCameraEnabled(true);
+        
+        // Wait a bit for the stream to be ready, then play
+        setTimeout(async () => {
           if (videoRef.current) {
-            videoRef.current.play().then(() => {
-              console.log('Video is now playing');
-              setCameraEnabled(true);
+            try {
+              await videoRef.current.play();
+              console.log('Video is now playing successfully');
               toast({
                 title: "Kamera aktiviert",
                 description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
               });
-            }).catch((error) => {
-              console.error('Video play failed:', error);
-              setCameraEnabled(false);
-            });
+            } catch (playError) {
+              console.error('Video play error:', playError);
+            }
           }
-        };
-
-        // Set up event listener for when video is ready
-        videoRef.current.onloadedmetadata = setupVideo;
-        
-        // Also try immediately in case metadata is already loaded
-        if (videoRef.current.readyState >= 1) {
-          setupVideo();
-        }
+        }, 500);
       }
     } catch (error) {
       console.error('Camera access error:', error);
       setCameraEnabled(false);
+      streamRef.current = null;
       toast({
         title: "Kamera-Fehler",
         description: "Konnte nicht auf die Kamera zugreifen. Bitte Berechtigung erteilen.",
@@ -157,8 +153,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   }, [toast]);
 
   const disableCamera = useCallback(() => {
+    console.log('Disabling camera...');
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Camera track stopped');
+      });
       streamRef.current = null;
     }
     if (videoRef.current) {
