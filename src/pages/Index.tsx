@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { PushupTracker } from '@/components/PushupTracker';
+import  PushupTracker  from '@/components/PushupTracker';
 import { StatsDisplay } from '@/components/StatsDisplay';
 import { SessionHistory } from '@/components/SessionHistory';
 import { Button } from '@/components/ui/button';
