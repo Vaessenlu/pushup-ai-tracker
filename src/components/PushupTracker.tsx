@@ -118,27 +118,44 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       streamRef.current = stream;
       
       if (videoRef.current) {
-        console.log('Setting video source...');
+        console.log('Setting video source to video element...');
         videoRef.current.srcObject = stream;
         
-        // Set camera enabled immediately so UI shows the video
-        setCameraEnabled(true);
-        
-        // Wait a bit for the stream to be ready, then play
-        setTimeout(async () => {
+        // Wait for the video to load metadata, then play and enable UI
+        videoRef.current.onloadedmetadata = async () => {
+          console.log('Video metadata loaded, attempting to play...');
           if (videoRef.current) {
             try {
               await videoRef.current.play();
               console.log('Video is now playing successfully');
+              setCameraEnabled(true);
               toast({
                 title: "Kamera aktiviert",
                 description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
               });
             } catch (playError) {
               console.error('Video play error:', playError);
+              setCameraEnabled(false);
             }
           }
-        }, 500);
+        };
+
+        // Also handle if metadata is already loaded
+        if (videoRef.current.readyState >= 1) {
+          console.log('Video metadata already available, playing immediately...');
+          try {
+            await videoRef.current.play();
+            console.log('Video is now playing successfully (immediate)');
+            setCameraEnabled(true);
+            toast({
+              title: "Kamera aktiviert",
+              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+            });
+          } catch (playError) {
+            console.error('Video play error (immediate):', playError);
+            setCameraEnabled(false);
+          }
+        }
       }
     } catch (error) {
       console.error('Camera access error:', error);
@@ -277,6 +294,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   playsInline
                   muted
                   className="w-full h-full object-cover transform scale-x-[-1]"
+                  style={{ display: 'block' }}
                 />
                 <canvas
                   ref={canvasRef}
