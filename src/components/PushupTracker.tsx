@@ -373,22 +373,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if (isTracking && videoRef.current && videoReady && modelReady && videoDimensions.width > 0) {
+    if ((isTracking || showSkeleton) && videoRef.current && videoReady && modelReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
-          setCount(newCount);
-          
-          // Update session time
-          const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
-          setSessionTime(currentTime);
+          if (isTracking) {
+            setCount(newCount);
+
+            // Update session time
+            const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
+            setSessionTime(currentTime);
+          }
         }
-        
-        if (isTracking) {
+
+        if (isTracking || showSkeleton) {
           animationRef.current = requestAnimationFrame(animate);
         }
       };
-      
+
       console.log('Starting pose detection animation loop');
       animationRef.current = requestAnimationFrame(animate);
     }
@@ -398,7 +400,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, videoReady, modelReady, videoDimensions]);
+  }, [isTracking, showSkeleton, videoReady, modelReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
