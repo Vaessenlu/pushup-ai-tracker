@@ -33,7 +33,7 @@ class PushupDetector {
       
       console.log('Creating pose detector...');
       const model = poseDetection.SupportedModels.PoseNet;
-      const detectorConfig = {
+      const detectorConfig: poseDetection.PosenetModelConfig = {
         quantBytes: 4,
         architecture: 'MobileNetV1',
         outputStride: 16,
