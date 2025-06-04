@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,17 +7,18 @@ import { Switch } from '@/components/ui/switch';
 import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
-import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import * as tf from '@tensorflow/tfjs';
+import * as poseDetection from '@tensorflow-models/pose-detection';
 
-// Enhanced PushupDetector with real MediaPipe integration
+// Enhanced PushupDetector with TensorFlow.js PoseNet
 class PushupDetector {
   private lastShoulderY: number = 0;
   private lastHipY: number = 0;
   private isDown: boolean = false;
   private count: number = 0;
-  private threshold: number = 0.05; // Normalized coordinate threshold
-  private pose: Pose | null = null;
+  private threshold: number = 0.05;
+  private detector: poseDetection.PoseDetector | null = null;
+  private isInitialized: boolean = false;
   private landmarks: any[] = [];
   private onPoseResults: ((results: any) => void) | null = null;
 
@@ -28,31 +28,25 @@ class PushupDetector {
 
   private async initializePose() {
     try {
-      this.pose = new Pose({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-        }
-      });
-
-      this.pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        smoothSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-
-      this.pose.onResults((results) => {
-        this.processResults(results);
-        if (this.onPoseResults) {
-          this.onPoseResults(results);
-        }
-      });
-
-      console.log('MediaPipe Pose initialized successfully');
+      console.log('Initializing TensorFlow.js backend...');
+      await tf.ready();
+      
+      console.log('Creating pose detector...');
+      const model = poseDetection.SupportedModels.PoseNet;
+      const detectorConfig = {
+        quantBytes: 4,
+        architecture: 'MobileNetV1',
+        outputStride: 16,
+        inputResolution: { width: 640, height: 480 },
+        multiplier: 0.75
+      };
+      
+      this.detector = await poseDetection.createDetector(model, detectorConfig);
+      this.isInitialized = true;
+      console.log('TensorFlow.js PoseNet initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize MediaPipe Pose:', error);
+      console.error('Failed to initialize TensorFlow.js PoseNet:', error);
+      this.isInitialized = false;
     }
   }
 
@@ -61,9 +55,13 @@ class PushupDetector {
   }
 
   async detect(videoElement: HTMLVideoElement): Promise<number> {
-    if (this.pose && videoElement.readyState >= 2) {
+    if (this.detector && this.isInitialized && videoElement.readyState >= 2) {
       try {
-        await this.pose.send({ image: videoElement });
+        const poses = await this.detector.estimatePoses(videoElement);
+        this.processResults(poses);
+        if (this.onPoseResults) {
+          this.onPoseResults(poses);
+        }
       } catch (error) {
         console.error('Pose detection error:', error);
       }
@@ -71,34 +69,42 @@ class PushupDetector {
     return this.count;
   }
 
-  private processResults(results: any) {
-    if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+  private processResults(poses: any[]) {
+    if (!poses || poses.length === 0) {
+      this.landmarks = [];
       return;
     }
 
-    this.landmarks = results.poseLandmarks;
+    const pose = poses[0]; // Use first detected pose
+    if (!pose.keypoints || pose.keypoints.length === 0) {
+      this.landmarks = [];
+      return;
+    }
 
-    // Get key landmarks for pushup detection
-    const leftShoulder = results.poseLandmarks[11];  // Left shoulder
-    const rightShoulder = results.poseLandmarks[12]; // Right shoulder
-    const leftHip = results.poseLandmarks[23];       // Left hip
-    const rightHip = results.poseLandmarks[24];      // Right hip
+    this.landmarks = pose.keypoints;
+
+    // Get key landmarks for pushup detection (PoseNet keypoint indices)
+    const leftShoulder = pose.keypoints.find((kp: any) => kp.name === 'left_shoulder');
+    const rightShoulder = pose.keypoints.find((kp: any) => kp.name === 'right_shoulder');
+    const leftHip = pose.keypoints.find((kp: any) => kp.name === 'left_hip');
+    const rightHip = pose.keypoints.find((kp: any) => kp.name === 'right_hip');
 
     if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
       return;
     }
 
-    // Calculate average shoulder and hip Y positions
-    const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-    const avgHipY = (leftHip.y + rightHip.y) / 2;
+    // Check confidence (score)
+    const shoulderConfidence = (leftShoulder.score + rightShoulder.score) / 2;
+    const hipConfidence = (leftHip.score + rightHip.score) / 2;
 
-    // Check visibility (confidence)
-    const shoulderVisibility = (leftShoulder.visibility + rightShoulder.visibility) / 2;
-    const hipVisibility = (leftHip.visibility + rightHip.visibility) / 2;
-
-    if (shoulderVisibility < 0.5 || hipVisibility < 0.5) {
+    if (shoulderConfidence < 0.3 || hipConfidence < 0.3) {
       return; // Not enough confidence in pose detection
     }
+
+    // Calculate average shoulder and hip Y positions (normalized to video height)
+    const videoHeight = 480; // Default height
+    const avgShoulderY = (leftShoulder.y + rightShoulder.y) / (2 * videoHeight);
+    const avgHipY = (leftHip.y + rightHip.y) / (2 * videoHeight);
 
     if (this.lastShoulderY === 0) {
       this.lastShoulderY = avgShoulderY;
@@ -144,9 +150,13 @@ class PushupDetector {
     return this.landmarks;
   }
 
+  isReady() {
+    return this.isInitialized;
+  }
+
   cleanup() {
-    if (this.pose) {
-      this.pose.close();
+    if (this.detector) {
+      this.detector.dispose();
     }
   }
 }
@@ -176,7 +186,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState([1]);
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [poseResults, setPoseResults] = useState<any>(null);
+  const [poseResults, setPoseResults] = useState<any[]>([]);
+  const [modelReady, setModelReady] = useState(false);
   
   const { toast } = useToast();
 
@@ -191,6 +202,17 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     detectorRef.current.setOnPoseResults((results) => {
       setPoseResults(results);
     });
+
+    // Check if model is ready
+    const checkModelReady = () => {
+      if (detectorRef.current.isReady()) {
+        setModelReady(true);
+        console.log('Pose detection model ready');
+      } else {
+        setTimeout(checkModelReady, 1000);
+      }
+    };
+    checkModelReady();
   }, []);
 
   // Separate useEffect to handle video stream assignment
@@ -278,10 +300,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   }, [setIsTracking]);
 
   const startTracking = useCallback(() => {
-    if (!cameraEnabled || !videoReady) {
+    if (!cameraEnabled || !videoReady || !modelReady) {
       toast({
-        title: "Kamera erforderlich",
-        description: "Bitte aktiviere zuerst die Kamera und warte bis das Video geladen ist.",
+        title: "System nicht bereit",
+        description: "Bitte warte bis Kamera und Pose-Modell bereit sind.",
         variant: "destructive",
       });
       return;
@@ -298,7 +320,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       title: "Tracking gestartet",
       description: "Beginne mit deinen Liegestützen!",
     });
-  }, [cameraEnabled, videoReady, setIsTracking, toast]);
+  }, [cameraEnabled, videoReady, modelReady, setIsTracking, toast]);
 
   const pauseTracking = useCallback(() => {
     setIsTracking(false);
@@ -332,7 +354,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if (isTracking && videoRef.current && videoReady) {
+    if (isTracking && videoRef.current && videoReady && modelReady) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
@@ -356,11 +378,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, videoReady]);
+  }, [isTracking, videoReady, modelReady]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
-    if (showSkeleton && poseResults && canvasRef.current && videoRef.current) {
+    if (showSkeleton && poseResults && poseResults.length > 0 && canvasRef.current && videoRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
 
@@ -372,37 +394,63 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (poseResults.poseLandmarks && poseResults.poseLandmarks.length > 0) {
-        // Draw pose connections (skeleton lines)
-        drawConnectors(ctx, poseResults.poseLandmarks, POSE_CONNECTIONS, {
-          color: '#00FF00',
-          lineWidth: 2
+      const pose = poseResults[0];
+      if (pose && pose.keypoints && pose.keypoints.length > 0) {
+        // Define pose connections (skeleton lines)
+        const connections = [
+          ['nose', 'left_eye'], ['nose', 'right_eye'],
+          ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
+          ['left_shoulder', 'right_shoulder'],
+          ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
+          ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
+          ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+          ['left_hip', 'right_hip'],
+          ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
+          ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
+        ];
+
+        // Draw skeleton connections
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 2;
+        connections.forEach(([pointA, pointB]) => {
+          const keypointA = pose.keypoints.find((kp: any) => kp.name === pointA);
+          const keypointB = pose.keypoints.find((kp: any) => kp.name === pointB);
+          
+          if (keypointA && keypointB && keypointA.score > 0.3 && keypointB.score > 0.3) {
+            ctx.beginPath();
+            ctx.moveTo(keypointA.x, keypointA.y);
+            ctx.lineTo(keypointB.x, keypointB.y);
+            ctx.stroke();
+          }
         });
 
-        // Draw pose landmarks (key points)
-        drawLandmarks(ctx, poseResults.poseLandmarks, {
-          color: '#FF0000',
-          radius: 4,
-          fillColor: '#FFFF00'
+        // Draw all keypoints
+        pose.keypoints.forEach((keypoint: any) => {
+          if (keypoint.score > 0.3) {
+            ctx.beginPath();
+            ctx.arc(keypoint.x, keypoint.y, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+            ctx.strokeStyle = '#FFFF00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
         });
 
-        // Draw key points for pushup detection with special colors
+        // Highlight key points for pushup detection
         const keyPoints = [
-          { index: 11, color: '#FF00FF', label: 'L Shoulder' }, // Left shoulder
-          { index: 12, color: '#FF00FF', label: 'R Shoulder' }, // Right shoulder
-          { index: 23, color: '#00FFFF', label: 'L Hip' },      // Left hip
-          { index: 24, color: '#00FFFF', label: 'R Hip' },      // Right hip
+          { name: 'left_shoulder', color: '#FF00FF', label: 'L Shoulder' },
+          { name: 'right_shoulder', color: '#FF00FF', label: 'R Shoulder' },
+          { name: 'left_hip', color: '#00FFFF', label: 'L Hip' },
+          { name: 'right_hip', color: '#00FFFF', label: 'R Hip' },
         ];
 
         keyPoints.forEach(point => {
-          const landmark = poseResults.poseLandmarks[point.index];
-          if (landmark && landmark.visibility > 0.5) {
-            const x = landmark.x * canvas.width;
-            const y = landmark.y * canvas.height;
-            
+          const keypoint = pose.keypoints.find((kp: any) => kp.name === point.name);
+          if (keypoint && keypoint.score > 0.3) {
             // Draw larger circle for key detection points
             ctx.beginPath();
-            ctx.arc(x, y, 8, 0, 2 * Math.PI);
+            ctx.arc(keypoint.x, keypoint.y, 8, 0, 2 * Math.PI);
             ctx.fillStyle = point.color;
             ctx.fill();
             ctx.strokeStyle = '#FFFFFF';
@@ -412,19 +460,20 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             // Draw label
             ctx.fillStyle = '#FFFFFF';
             ctx.font = '12px Arial';
-            ctx.fillText(point.label, x + 10, y - 10);
+            ctx.fillText(point.label, keypoint.x + 10, keypoint.y - 10);
           }
         });
 
         // Draw confidence indicator
         ctx.fillStyle = '#FFFFFF';
         ctx.font = '14px Arial';
-        const avgConfidence = poseResults.poseLandmarks.reduce((sum: number, landmark: any) => 
-          sum + (landmark.visibility || 0), 0) / poseResults.poseLandmarks.length;
+        const avgConfidence = pose.keypoints.reduce((sum: number, kp: any) => 
+          sum + kp.score, 0) / pose.keypoints.length;
         ctx.fillText(`Pose Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 30);
+        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 50);
       }
     }
-  }, [showSkeleton, poseResults]);
+  }, [showSkeleton, poseResults, modelReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -457,6 +506,14 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
                     transformOrigin: 'center center'
                   }}
+                  onLoadedMetadata={() => {
+                    console.log('Video metadata loaded');
+                    setVideoReady(true);
+                    toast({
+                      title: "Kamera aktiviert",
+                      description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+                    });
+                  }}
                 />
                 <canvas
                   ref={canvasRef}
@@ -476,9 +533,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant="outline" className="bg-white/90">
                     Video: {videoReady ? 'Bereit' : 'Lädt...'}
                   </Badge>
-                  {poseResults && poseResults.poseLandmarks && (
+                  <Badge variant="outline" className="bg-white/90">
+                    Model: {modelReady ? 'Bereit' : 'Lädt...'}
+                  </Badge>
+                  {poseResults && poseResults.length > 0 && (
                     <Badge variant="outline" className="bg-white/90">
-                      Pose: {poseResults.poseLandmarks.length > 0 ? 'Erkannt' : 'Nicht erkannt'}
+                      Pose: {poseResults[0]?.keypoints?.length > 0 ? 'Erkannt' : 'Nicht erkannt'}
                     </Badge>
                   )}
                   {isTracking && (
@@ -565,7 +625,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 Kamera aus
               </Button>
               
-              {status === 'ready' && videoReady && (
+              {status === 'ready' && videoReady && modelReady && (
                 <Button 
                   onClick={startTracking}
                   className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
@@ -575,18 +635,21 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 </Button>
               )}
               
-              {status === 'ready' && !videoReady && (
+              {status === 'ready' && (!videoReady || !modelReady) && (
                 <Button 
                   disabled
                   variant="outline"
                 >
-                  Video lädt...
+                  {!videoReady ? 'Video lädt...' : 'Model lädt...'}
                 </Button>
               )}
               
               {status === 'tracking' && (
                 <Button 
-                  onClick={pauseTracking}
+                  onClick={() => {
+                    setIsTracking(false);
+                    setStatus('paused');
+                  }}
                   variant="outline"
                 >
                   <Pause className="h-4 w-4 mr-2" />
@@ -596,7 +659,30 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               
               {(status === 'tracking' || status === 'paused') && (
                 <Button 
-                  onClick={stopTracking}
+                  onClick={() => {
+                    const endTime = Date.now();
+                    const duration = Math.round((endTime - startTimeRef.current) / 1000);
+                    const avgTimePerRep = count > 0 ? duration / count : 0;
+
+                    if (count > 0) {
+                      onSessionComplete({
+                        date: new Date(),
+                        count,
+                        duration,
+                        avgTimePerRep,
+                      });
+
+                      toast({
+                        title: "Session beendet!",
+                        description: `${count} Liegestützen in ${duration}s absolviert!`,
+                      });
+                    }
+
+                    setIsTracking(false);
+                    setStatus('ready');
+                    setCount(0);
+                    setSessionTime(0);
+                  }}
                   variant="destructive"
                 >
                   <Square className="h-4 w-4 mr-2" />
@@ -625,6 +711,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           <h3 className="font-semibold text-blue-900 mb-2">Anleitung:</h3>
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• Positioniere dich so, dass dein ganzer Körper sichtbar ist</li>
+            <li>• Warte bis das Pose-Modell geladen ist (Status: "Model: Bereit")</li>
             <li>• Nutze den Zoom-Slider um die Kameraansicht anzupassen</li>
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
             <li>• Rote/gelbe Punkte zeigen erkannte Körperteile, grüne Linien das Skelett</li>
