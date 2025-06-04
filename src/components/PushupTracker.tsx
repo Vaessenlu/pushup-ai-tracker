@@ -8,6 +8,7 @@ import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff } 
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgl';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 
 // Enhanced PushupDetector with TensorFlow.js PoseNet
@@ -29,6 +30,7 @@ class PushupDetector {
   private async initializePose() {
     try {
       console.log('Initializing TensorFlow.js backend...');
+      await tf.setBackend('webgl');
       await tf.ready();
       
       console.log('Creating pose detector...');
