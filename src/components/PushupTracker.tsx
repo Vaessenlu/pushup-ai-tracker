@@ -30,9 +30,16 @@ class PushupDetector {
   private async initializePose() {
     try {
       console.log('Initializing TensorFlow.js backend...');
-      await tf.setBackend('webgl');
-      await tf.ready();
-      
+      if (tf.getBackend() !== 'webgl') {
+        await tf.setBackend('webgl');
+        await tf.ready();
+      }
+
+      // Dispose any existing detector before creating a new one
+      if (this.detector) {
+        await this.detector.dispose();
+      }
+
       console.log('Creating pose detector...');
       const model = poseDetection.SupportedModels.PoseNet;
       const detectorConfig: poseDetection.PosenetModelConfig = {
@@ -66,7 +73,7 @@ class PushupDetector {
 
       try {
         console.log('Detecting poses on video with dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-        const poses = await this.detector.estimatePoses(videoElement);
+        const poses = await this.detector.estimatePoses(videoElement, {flipHorizontal: true});
         console.log('Poses detected:', poses.length);
         this.processResults(poses);
         if (this.onPoseResults) {
@@ -75,8 +82,8 @@ class PushupDetector {
       } catch (error) {
         console.error('Pose detection error:', error);
         if ((error as Error).message && (error as Error).message.includes('roi width cannot be 0')) {
-          console.warn('Reinitializing pose detector due to ROI error');
-          await this.initializePose();
+          console.warn('Skipping frame due to ROI error');
+          return this.count;
         }
       }
     }
