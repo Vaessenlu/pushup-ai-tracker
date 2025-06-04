@@ -35,7 +35,7 @@ class PushupDetector {
       const model = poseDetection.SupportedModels.PoseNet;
       const detectorConfig: poseDetection.PosenetModelConfig = {
         quantBytes: 4,
-        architecture: 'MobileNetV1',
+        architecture: 'MobileNetV1' as poseDetection.PoseNetArchitecture,
         outputStride: 16,
         inputResolution: { width: 640, height: 480 },
         multiplier: 0.75
@@ -56,8 +56,16 @@ class PushupDetector {
 
   async detect(videoElement: HTMLVideoElement): Promise<number> {
     if (this.detector && this.isInitialized && videoElement.readyState >= 2) {
+      // Check if video has valid dimensions
+      if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+        console.log('Video dimensions not ready yet');
+        return this.count;
+      }
+
       try {
+        console.log('Detecting poses on video with dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
         const poses = await this.detector.estimatePoses(videoElement);
+        console.log('Poses detected:', poses.length);
         this.processResults(poses);
         if (this.onPoseResults) {
           this.onPoseResults(poses);
@@ -188,6 +196,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [poseResults, setPoseResults] = useState<any[]>([]);
   const [modelReady, setModelReady] = useState(false);
+  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   
   const { toast } = useToast();
 
@@ -200,6 +209,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   // Set up pose results callback
   useEffect(() => {
     detectorRef.current.setOnPoseResults((results) => {
+      console.log('Pose results received:', results.length);
       setPoseResults(results);
     });
 
@@ -215,6 +225,28 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     checkModelReady();
   }, []);
 
+  // Handle video metadata loaded
+  const handleVideoLoadedMetadata = useCallback(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      console.log('Video metadata loaded:', video.videoWidth, 'x', video.videoHeight);
+      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
+      setVideoReady(true);
+      
+      // Update canvas size immediately
+      if (canvasRef.current) {
+        canvasRef.current.width = video.videoWidth;
+        canvasRef.current.height = video.videoHeight;
+        console.log('Canvas size set to:', video.videoWidth, 'x', video.videoHeight);
+      }
+      
+      toast({
+        title: "Kamera aktiviert",
+        description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
+      });
+    }
+  }, [toast]);
+
   // Separate useEffect to handle video stream assignment
   useEffect(() => {
     if (streamRef.current && videoRef.current && cameraEnabled) {
@@ -223,35 +255,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       const video = videoRef.current;
       video.srcObject = streamRef.current;
       
-      const handleLoadedMetadata = () => {
-        console.log('Video metadata loaded, starting playback...');
-        video.play()
-          .then(() => {
-            console.log('Video playback started successfully');
-            setVideoReady(true);
-            toast({
-              title: "Kamera aktiviert",
-              description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-            });
-          })
-          .catch((error) => {
-            console.error('Video play failed:', error);
-            setVideoReady(false);
-          });
-      };
-
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('loadedmetadata', handleVideoLoadedMetadata);
       
-      // If metadata is already loaded
-      if (video.readyState >= 1) {
-        handleLoadedMetadata();
-      }
+      video.play()
+        .then(() => {
+          console.log('Video playback started successfully');
+        })
+        .catch((error) => {
+          console.error('Video play failed:', error);
+          setVideoReady(false);
+        });
 
       return () => {
-        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('loadedmetadata', handleVideoLoadedMetadata);
       };
     }
-  }, [cameraEnabled, toast]);
+  }, [cameraEnabled, handleVideoLoadedMetadata]);
 
   const enableCamera = useCallback(async () => {
     try {
@@ -354,7 +373,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if (isTracking && videoRef.current && videoReady && modelReady) {
+    if (isTracking && videoRef.current && videoReady && modelReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
@@ -370,6 +389,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         }
       };
       
+      console.log('Starting pose detection animation loop');
       animationRef.current = requestAnimationFrame(animate);
     }
 
@@ -378,24 +398,31 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, videoReady, modelReady]);
+  }, [isTracking, videoReady, modelReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
-    if (showSkeleton && poseResults && poseResults.length > 0 && canvasRef.current && videoRef.current) {
+    if (showSkeleton && poseResults && poseResults.length > 0 && canvasRef.current && videoDimensions.width > 0) {
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
 
-      // Set canvas size to match video
       const canvas = canvasRef.current;
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
+      
+      // Ensure canvas has correct dimensions
+      if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
+        canvas.width = videoDimensions.width;
+        canvas.height = videoDimensions.height;
+        console.log('Canvas resized to:', videoDimensions.width, 'x', videoDimensions.height);
+      }
 
-      // Clear canvas
+      // Clear canvas with semi-transparent background for visibility
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      
+      console.log('Drawing poses:', poseResults.length);
       const pose = poseResults[0];
       if (pose && pose.keypoints && pose.keypoints.length > 0) {
+        console.log('Drawing', pose.keypoints.length, 'keypoints');
+
         // Define pose connections (skeleton lines)
         const connections = [
           ['nose', 'left_eye'], ['nose', 'right_eye'],
@@ -411,7 +438,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         // Draw skeleton connections
         ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         connections.forEach(([pointA, pointB]) => {
           const keypointA = pose.keypoints.find((kp: any) => kp.name === pointA);
           const keypointB = pose.keypoints.find((kp: any) => kp.name === pointB);
@@ -428,10 +455,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         pose.keypoints.forEach((keypoint: any) => {
           if (keypoint.score > 0.3) {
             ctx.beginPath();
-            ctx.arc(keypoint.x, keypoint.y, 4, 0, 2 * Math.PI);
+            ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
             ctx.fillStyle = '#FF0000';
             ctx.fill();
-            ctx.strokeStyle = '#FFFF00';
+            ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 2;
             ctx.stroke();
           }
@@ -450,30 +477,37 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           if (keypoint && keypoint.score > 0.3) {
             // Draw larger circle for key detection points
             ctx.beginPath();
-            ctx.arc(keypoint.x, keypoint.y, 8, 0, 2 * Math.PI);
+            ctx.arc(keypoint.x, keypoint.y, 10, 0, 2 * Math.PI);
             ctx.fillStyle = point.color;
             ctx.fill();
             ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Draw label
+            // Draw label with background
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(keypoint.x + 12, keypoint.y - 20, 70, 20);
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '12px Arial';
-            ctx.fillText(point.label, keypoint.x + 10, keypoint.y - 10);
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText(point.label, keypoint.x + 15, keypoint.y - 5);
           }
         });
 
-        // Draw confidence indicator
+        // Draw confidence indicator with background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(5, 5, 250, 70);
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '14px Arial';
+        ctx.font = 'bold 14px Arial';
         const avgConfidence = pose.keypoints.reduce((sum: number, kp: any) => 
           sum + kp.score, 0) / pose.keypoints.length;
-        ctx.fillText(`Pose Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 30);
-        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 50);
+        ctx.fillText(`Pose Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
+        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
+        ctx.fillText(`Keypoints: ${pose.keypoints.length}`, 10, 65);
+        
+        console.log('Pose drawn successfully with confidence:', (avgConfidence * 100).toFixed(1) + '%');
       }
     }
-  }, [showSkeleton, poseResults, modelReady]);
+  }, [showSkeleton, poseResults, modelReady, videoDimensions]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -506,14 +540,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
                     transformOrigin: 'center center'
                   }}
-                  onLoadedMetadata={() => {
-                    console.log('Video metadata loaded');
-                    setVideoReady(true);
-                    toast({
-                      title: "Kamera aktiviert",
-                      description: "Positioniere dich so, dass dein ganzer Körper sichtbar ist.",
-                    });
-                  }}
                 />
                 <canvas
                   ref={canvasRef}
@@ -521,7 +547,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   style={{ 
                     transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
                     transformOrigin: 'center center',
-                    display: showSkeleton ? 'block' : 'none'
+                    display: showSkeleton ? 'block' : 'none',
+                    border: showSkeleton ? '2px solid red' : 'none' // Debug border
                   }}
                 />
                 {/* Status Overlay */}
@@ -531,16 +558,19 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                      status === 'paused' ? 'Pausiert' : 'Bereit'}
                   </Badge>
                   <Badge variant="outline" className="bg-white/90">
-                    Video: {videoReady ? 'Bereit' : 'Lädt...'}
+                    Video: {videoReady ? `${videoDimensions.width}x${videoDimensions.height}` : 'Lädt...'}
                   </Badge>
                   <Badge variant="outline" className="bg-white/90">
                     Model: {modelReady ? 'Bereit' : 'Lädt...'}
                   </Badge>
                   {poseResults && poseResults.length > 0 && (
-                    <Badge variant="outline" className="bg-white/90">
-                      Pose: {poseResults[0]?.keypoints?.length > 0 ? 'Erkannt' : 'Nicht erkannt'}
+                    <Badge variant="outline" className="bg-green-100">
+                      Pose: {poseResults[0]?.keypoints?.length || 0} Punkte erkannt
                     </Badge>
                   )}
+                  <Badge variant="outline" className="bg-white/90">
+                    Skelett: {showSkeleton ? 'AN' : 'AUS'}
+                  </Badge>
                   {isTracking && (
                     <Badge variant="outline" className="bg-white/90">
                       Zeit: {formatTime(sessionTime)}
