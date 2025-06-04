@@ -74,6 +74,10 @@ class PushupDetector {
         }
       } catch (error) {
         console.error('Pose detection error:', error);
+        if ((error as Error).message && (error as Error).message.includes('roi width cannot be 0')) {
+          console.warn('Reinitializing pose detector due to ROI error');
+          await this.initializePose();
+        }
       }
     }
     return this.count;
