@@ -7,160 +7,97 @@ import { Switch } from '@/components/ui/switch';
 import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import * as poseDetection from '@tensorflow-models/pose-detection';
+import { Pose, POSE_CONNECTIONS, Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
 // Enhanced PushupDetector with TensorFlow.js PoseNet
 class PushupDetector {
-  private lastShoulderY: number = 0;
-  private lastHipY: number = 0;
-  private isDown: boolean = false;
-  private count: number = 0;
-  private threshold: number = 0.05;
-  private detector: poseDetection.PoseDetector | null = null;
-  private isInitialized: boolean = false;
-  private landmarks: any[] = [];
-  private onPoseResults: ((results: any) => void) | null = null;
+  private pose: Pose;
+  private isDown = false;
+  private count = 0;
+  private landmarks: PoseResults['poseLandmarks'] | null = null;
+  private isInitialized = false;
+  private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor() {
-    this.initializePose();
+    this.pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+
+    this.pose.setOptions({
+      modelComplexity: 0,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      selfieMode: true,
+    });
+
+    this.pose.onResults((results) => {
+      if (results.poseLandmarks) {
+        if (!this.isInitialized) this.isInitialized = true;
+        this.landmarks = results.poseLandmarks;
+        this.processLandmarks(results.poseLandmarks);
+        if (this.onPoseResults) {
+          this.onPoseResults(results.poseLandmarks);
+        }
+      }
+    });
   }
 
-  private async initializePose() {
-    try {
-      console.log('Initializing TensorFlow.js backend...');
-      if (tf.getBackend() !== 'webgl') {
-        await tf.setBackend('webgl');
-        await tf.ready();
-      }
-
-      // Dispose any existing detector before creating a new one
-      if (this.detector) {
-        await this.detector.dispose();
-      }
-
-      console.log('Creating pose detector...');
-      const model = poseDetection.SupportedModels.PoseNet;
-      const detectorConfig: poseDetection.PosenetModelConfig = {
-        quantBytes: 4,
-        architecture: 'MobileNetV1' as poseDetection.PoseNetArchitecture,
-        outputStride: 16,
-        inputResolution: { width: 640, height: 480 },
-        multiplier: 0.75
-      };
-      
-      this.detector = await poseDetection.createDetector(model, detectorConfig);
-      this.isInitialized = true;
-      console.log('TensorFlow.js PoseNet initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize TensorFlow.js PoseNet:', error);
-      this.isInitialized = false;
-    }
-  }
-
-  setOnPoseResults(callback: (results: any) => void) {
+  setOnPoseResults(callback: (results: PoseResults['poseLandmarks']) => void) {
     this.onPoseResults = callback;
   }
 
   async detect(videoElement: HTMLVideoElement): Promise<number> {
-    if (this.detector && this.isInitialized && videoElement.readyState >= 2) {
-      // Check if video has valid dimensions
-      if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
-        console.log('Video dimensions not ready yet');
-        return this.count;
-      }
-
-      try {
-        console.log('Detecting poses on video with dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-        const poses = await this.detector.estimatePoses(videoElement, {flipHorizontal: true});
-        console.log('Poses detected:', poses.length);
-        this.processResults(poses);
-        if (this.onPoseResults) {
-          this.onPoseResults(poses);
-        }
-      } catch (error) {
-        console.error('Pose detection error:', error);
-        if ((error as Error).message && (error as Error).message.includes('roi width cannot be 0')) {
-          console.warn('Skipping frame due to ROI error');
-          return this.count;
-        }
-      }
+    if (!this.isInitialized) {
+      // attempt to process frame to trigger initialization
+      await this.pose.send({ image: videoElement });
+      return this.count;
     }
+
+    await this.pose.send({ image: videoElement });
     return this.count;
   }
 
-  private processResults(poses: any[]) {
-    if (!poses || poses.length === 0) {
-      this.landmarks = [];
+  private calculateAngle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
+    const ab = { x: a.x - b.x, y: a.y - b.y };
+    const cb = { x: c.x - b.x, y: c.y - b.y };
+    const dot = ab.x * cb.x + ab.y * cb.y;
+    const magAB = Math.hypot(ab.x, ab.y);
+    const magCB = Math.hypot(cb.x, cb.y);
+    const angle = Math.acos(dot / (magAB * magCB));
+    return (angle * 180) / Math.PI;
+  }
+
+  private processLandmarks(landmarks: NormalizedLandmarkList) {
+    const leftShoulder = landmarks[11];
+    const leftElbow = landmarks[13];
+    const leftWrist = landmarks[15];
+    const rightShoulder = landmarks[12];
+    const rightElbow = landmarks[14];
+    const rightWrist = landmarks[16];
+
+    if (!leftShoulder || !leftElbow || !leftWrist || !rightShoulder || !rightElbow || !rightWrist) {
       return;
     }
 
-    const pose = poses[0]; // Use first detected pose
-    if (!pose.keypoints || pose.keypoints.length === 0) {
-      this.landmarks = [];
-      return;
-    }
+    const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
+    const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
+    const avgAngle = (leftAngle + rightAngle) / 2;
 
-    this.landmarks = pose.keypoints;
-
-    // Get key landmarks for pushup detection (PoseNet keypoint indices)
-    const leftShoulder = pose.keypoints.find((kp: any) => kp.name === 'left_shoulder');
-    const rightShoulder = pose.keypoints.find((kp: any) => kp.name === 'right_shoulder');
-    const leftHip = pose.keypoints.find((kp: any) => kp.name === 'left_hip');
-    const rightHip = pose.keypoints.find((kp: any) => kp.name === 'right_hip');
-
-    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
-      return;
-    }
-
-    // Check confidence (score)
-    const shoulderConfidence = (leftShoulder.score + rightShoulder.score) / 2;
-    const hipConfidence = (leftHip.score + rightHip.score) / 2;
-
-    if (shoulderConfidence < 0.3 || hipConfidence < 0.3) {
-      return; // Not enough confidence in pose detection
-    }
-
-    // Calculate average shoulder and hip Y positions (normalized to video height)
-    const videoHeight = 480; // Default height
-    const avgShoulderY = (leftShoulder.y + rightShoulder.y) / (2 * videoHeight);
-    const avgHipY = (leftHip.y + rightHip.y) / (2 * videoHeight);
-
-    if (this.lastShoulderY === 0) {
-      this.lastShoulderY = avgShoulderY;
-      this.lastHipY = avgHipY;
-      return;
-    }
-
-    // Calculate movement (positive = moving down, negative = moving up)
-    const shoulderMovement = avgShoulderY - this.lastShoulderY;
-    const hipMovement = avgHipY - this.lastHipY;
-    const avgMovement = (shoulderMovement + hipMovement) / 2;
-
-    // Detect downward movement (going down in pushup)
-    if (avgMovement > this.threshold && !this.isDown) {
+    if (avgAngle < 100 && !this.isDown) {
       this.isDown = true;
-      console.log('Going down');
     }
-    
-    // Detect upward movement (coming up from pushup)
-    if (avgMovement < -this.threshold && this.isDown) {
+
+    if (avgAngle > 160 && this.isDown) {
       this.isDown = false;
       this.count++;
-      console.log(`Pushup completed! Count: ${this.count}`);
     }
-
-    this.lastShoulderY = avgShoulderY;
-    this.lastHipY = avgHipY;
   }
 
   reset() {
     this.count = 0;
-    this.lastShoulderY = 0;
-    this.lastHipY = 0;
     this.isDown = false;
-    this.landmarks = [];
+    this.landmarks = null;
   }
 
   getCount() {
@@ -176,9 +113,7 @@ class PushupDetector {
   }
 
   cleanup() {
-    if (this.detector) {
-      this.detector.dispose();
-    }
+    this.pose.reset();
   }
 }
 
@@ -207,7 +142,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState([1]);
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [poseResults, setPoseResults] = useState<any[]>([]);
+  const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   
@@ -222,7 +157,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   // Set up pose results callback
   useEffect(() => {
     detectorRef.current.setOnPoseResults((results) => {
-      console.log('Pose results received:', results.length);
+      console.log('Pose results received:', results ? results.length : 0);
       setPoseResults(results);
     });
 
@@ -417,110 +352,33 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
-    if (showSkeleton && poseResults && poseResults.length > 0 && canvasRef.current && videoDimensions.width > 0) {
+    if (showSkeleton && poseResults && canvasRef.current && videoDimensions.width > 0) {
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
 
       const canvas = canvasRef.current;
-      
-      // Ensure canvas has correct dimensions
+
       if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
         canvas.width = videoDimensions.width;
         canvas.height = videoDimensions.height;
-        console.log('Canvas resized to:', videoDimensions.width, 'x', videoDimensions.height);
       }
 
-      // Clear canvas with semi-transparent background for visibility
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      console.log('Drawing poses:', poseResults.length);
-      const pose = poseResults[0];
-      if (pose && pose.keypoints && pose.keypoints.length > 0) {
-        console.log('Drawing', pose.keypoints.length, 'keypoints');
 
-        // Define pose connections (skeleton lines)
-        const connections = [
-          ['nose', 'left_eye'], ['nose', 'right_eye'],
-          ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
-          ['left_shoulder', 'right_shoulder'],
-          ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
-          ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
-          ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
-          ['left_hip', 'right_hip'],
-          ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
-          ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
-        ];
+      drawConnectors(ctx, poseResults, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
+      drawLandmarks(ctx, poseResults, { color: '#FF0000', lineWidth: 2 });
 
-        // Draw skeleton connections
-        ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 3;
-        connections.forEach(([pointA, pointB]) => {
-          const keypointA = pose.keypoints.find((kp: any) => kp.name === pointA);
-          const keypointB = pose.keypoints.find((kp: any) => kp.name === pointB);
-          
-          if (keypointA && keypointB && keypointA.score > 0.3 && keypointB.score > 0.3) {
-            ctx.beginPath();
-            ctx.moveTo(keypointA.x, keypointA.y);
-            ctx.lineTo(keypointB.x, keypointB.y);
-            ctx.stroke();
-          }
-        });
+      [11, 12].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#FF00FF', radius: 6 }));
+      [23, 24].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#00FFFF', radius: 6 }));
 
-        // Draw all keypoints
-        pose.keypoints.forEach((keypoint: any) => {
-          if (keypoint.score > 0.3) {
-            ctx.beginPath();
-            ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
-            ctx.fillStyle = '#FF0000';
-            ctx.fill();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-        });
+      const avgConfidence = poseResults.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / poseResults.length;
 
-        // Highlight key points for pushup detection
-        const keyPoints = [
-          { name: 'left_shoulder', color: '#FF00FF', label: 'L Shoulder' },
-          { name: 'right_shoulder', color: '#FF00FF', label: 'R Shoulder' },
-          { name: 'left_hip', color: '#00FFFF', label: 'L Hip' },
-          { name: 'right_hip', color: '#00FFFF', label: 'R Hip' },
-        ];
-
-        keyPoints.forEach(point => {
-          const keypoint = pose.keypoints.find((kp: any) => kp.name === point.name);
-          if (keypoint && keypoint.score > 0.3) {
-            // Draw larger circle for key detection points
-            ctx.beginPath();
-            ctx.arc(keypoint.x, keypoint.y, 10, 0, 2 * Math.PI);
-            ctx.fillStyle = point.color;
-            ctx.fill();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-
-            // Draw label with background
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(keypoint.x + 12, keypoint.y - 20, 70, 20);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 12px Arial';
-            ctx.fillText(point.label, keypoint.x + 15, keypoint.y - 5);
-          }
-        });
-
-        // Draw confidence indicator with background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(5, 5, 250, 70);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 14px Arial';
-        const avgConfidence = pose.keypoints.reduce((sum: number, kp: any) => 
-          sum + kp.score, 0) / pose.keypoints.length;
-        ctx.fillText(`Pose Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
-        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
-        ctx.fillText(`Keypoints: ${pose.keypoints.length}`, 10, 65);
-        
-        console.log('Pose drawn successfully with confidence:', (avgConfidence * 100).toFixed(1) + '%');
-      }
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(5, 5, 220, 50);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
+      ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
     }
   }, [showSkeleton, poseResults, modelReady, videoDimensions]);
 
@@ -578,9 +436,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant="outline" className="bg-white/90">
                     Model: {modelReady ? 'Bereit' : 'Lädt...'}
                   </Badge>
-                  {poseResults && poseResults.length > 0 && (
+                  {poseResults && (
                     <Badge variant="outline" className="bg-green-100">
-                      Pose: {poseResults[0]?.keypoints?.length || 0} Punkte erkannt
+                      Pose: {poseResults.length} Punkte erkannt
                     </Badge>
                   )}
                   <Badge variant="outline" className="bg-white/90">
