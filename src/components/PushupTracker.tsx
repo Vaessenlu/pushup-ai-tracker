@@ -10,6 +10,42 @@ import { Session } from '@/pages/Index';
 import { Pose, POSE_CONNECTIONS, Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
+const POSE_LANDMARK_NAMES = [
+  'NOSE',
+  'LEFT_EYE_INNER',
+  'LEFT_EYE',
+  'LEFT_EYE_OUTER',
+  'RIGHT_EYE_INNER',
+  'RIGHT_EYE',
+  'RIGHT_EYE_OUTER',
+  'LEFT_EAR',
+  'RIGHT_EAR',
+  'MOUTH_LEFT',
+  'MOUTH_RIGHT',
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX'
+];
+
 // Enhanced PushupDetector with TensorFlow.js PoseNet
 class PushupDetector {
   private pose: Pose;
@@ -159,19 +195,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     detectorRef.current.setOnPoseResults((results) => {
       console.log('Pose results received:', results ? results.length : 0);
       setPoseResults(results);
-    });
-
-    // Check if model is ready
-    const checkModelReady = () => {
-      if (detectorRef.current.isReady()) {
+      if (!modelReady) {
         setModelReady(true);
         console.log('Pose detection model ready');
-      } else {
-        setTimeout(checkModelReady, 1000);
       }
-    };
-    checkModelReady();
-  }, []);
+    });
+  }, [modelReady]);
 
   // Handle video metadata loaded
   const handleVideoLoadedMetadata = useCallback(() => {
@@ -267,13 +296,20 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   }, [setIsTracking]);
 
   const startTracking = useCallback(() => {
-    if (!cameraEnabled || !videoReady || !modelReady) {
+    if (!cameraEnabled || !videoReady) {
       toast({
         title: "System nicht bereit",
-        description: "Bitte warte bis Kamera und Pose-Modell bereit sind.",
+        description: "Bitte warte bis die Kamera bereit ist.",
         variant: "destructive",
       });
       return;
+    }
+
+    if (!modelReady) {
+      toast({
+        title: "Modell initialisiert",
+        description: "Das Pose-Modell wird mit dem ersten Frame geladen.",
+      });
     }
 
     detectorRef.current.reset();
@@ -321,7 +357,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if ((isTracking || showSkeleton) && videoRef.current && videoReady && modelReady && videoDimensions.width > 0) {
+    if ((isTracking || showSkeleton) && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
@@ -348,7 +384,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, showSkeleton, videoReady, modelReady, videoDimensions]);
+  }, [isTracking, showSkeleton, videoReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
@@ -367,6 +403,14 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
       drawConnectors(ctx, poseResults, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
       drawLandmarks(ctx, poseResults, { color: '#FF0000', lineWidth: 2 });
+
+      poseResults.forEach((lm, idx) => {
+        const x = lm.x * canvas.width;
+        const y = lm.y * canvas.height;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '10px Arial';
+        ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
+      });
 
       [11, 12].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#FF00FF', radius: 6 }));
       [23, 24].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#00FFFF', radius: 6 }));
