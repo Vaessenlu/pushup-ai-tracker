@@ -195,19 +195,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     detectorRef.current.setOnPoseResults((results) => {
       console.log('Pose results received:', results ? results.length : 0);
       setPoseResults(results);
-    });
-
-    // Check if model is ready
-    const checkModelReady = () => {
-      if (detectorRef.current.isReady()) {
+      if (!modelReady) {
         setModelReady(true);
         console.log('Pose detection model ready');
-      } else {
-        setTimeout(checkModelReady, 1000);
       }
-    };
-    checkModelReady();
-  }, []);
+    });
+  }, [modelReady]);
 
   // Handle video metadata loaded
   const handleVideoLoadedMetadata = useCallback(() => {
@@ -303,13 +296,20 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   }, [setIsTracking]);
 
   const startTracking = useCallback(() => {
-    if (!cameraEnabled || !videoReady || !modelReady) {
+    if (!cameraEnabled || !videoReady) {
       toast({
         title: "System nicht bereit",
-        description: "Bitte warte bis Kamera und Pose-Modell bereit sind.",
+        description: "Bitte warte bis die Kamera bereit ist.",
         variant: "destructive",
       });
       return;
+    }
+
+    if (!modelReady) {
+      toast({
+        title: "Modell initialisiert",
+        description: "Das Pose-Modell wird mit dem ersten Frame geladen.",
+      });
     }
 
     detectorRef.current.reset();
@@ -357,7 +357,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if ((isTracking || showSkeleton) && videoRef.current && videoReady && modelReady && videoDimensions.width > 0) {
+    if ((isTracking || showSkeleton) && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
@@ -384,7 +384,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, showSkeleton, videoReady, modelReady, videoDimensions]);
+  }, [isTracking, showSkeleton, videoReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
