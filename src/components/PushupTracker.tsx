@@ -19,199 +19,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
-import {
-  Pose,
-  POSE_CONNECTIONS,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
+import { POSE_CONNECTIONS, Results as PoseResults } from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-
-const POSE_LANDMARK_NAMES = [
-  'NOSE',
-  'LEFT_EYE_INNER',
-  'LEFT_EYE',
-  'LEFT_EYE_OUTER',
-  'RIGHT_EYE_INNER',
-  'RIGHT_EYE',
-  'RIGHT_EYE_OUTER',
-  'LEFT_EAR',
-  'RIGHT_EAR',
-  'MOUTH_LEFT',
-  'MOUTH_RIGHT',
-  'LEFT_SHOULDER',
-  'RIGHT_SHOULDER',
-  'LEFT_ELBOW',
-  'RIGHT_ELBOW',
-  'LEFT_WRIST',
-  'RIGHT_WRIST',
-  'LEFT_PINKY',
-  'RIGHT_PINKY',
-  'LEFT_INDEX',
-  'RIGHT_INDEX',
-  'LEFT_THUMB',
-  'RIGHT_THUMB',
-  'LEFT_HIP',
-  'RIGHT_HIP',
-  'LEFT_KNEE',
-  'RIGHT_KNEE',
-  'LEFT_ANKLE',
-  'RIGHT_ANKLE',
-  'LEFT_HEEL',
-  'RIGHT_HEEL',
-  'LEFT_FOOT_INDEX',
-  'RIGHT_FOOT_INDEX'
-];
-
-// Indices of landmarks not relevant for push-up detection (face & fingers)
-const UNIMPORTANT_LANDMARKS = [
-  // face landmarks
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  // finger landmarks
-  17, 18, 19, 20, 21, 22,
-];
-
-// Enhanced PushupDetector with TensorFlow.js PoseNet
-class PushupDetector {
-  private pose: Pose;
-  private isDown = false;
-  private count = 0;
-  private legSeen = false;
-  private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
-  private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
-
-  constructor() {
-    this.pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
-
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-        if (this.onPoseResults) {
-          this.onPoseResults(results.poseLandmarks);
-        }
-      }
-    });
-  }
-
-  setOnPoseResults(callback: (results: PoseResults['poseLandmarks']) => void) {
-    this.onPoseResults = callback;
-  }
-
-  async detect(videoElement: HTMLVideoElement): Promise<number> {
-    if (!this.isInitialized) {
-      // attempt to process frame to trigger initialization
-      await this.pose.send({ image: videoElement });
-      return this.count;
-    }
-
-    await this.pose.send({ image: videoElement });
-    return this.count;
-  }
-
-  private calculateAngle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
-    const ab = { x: a.x - b.x, y: a.y - b.y };
-    const cb = { x: c.x - b.x, y: c.y - b.y };
-    const dot = ab.x * cb.x + ab.y * cb.y;
-    const magAB = Math.hypot(ab.x, ab.y);
-    const magCB = Math.hypot(cb.x, cb.y);
-    const angle = Math.acos(dot / (magAB * magCB));
-    return (angle * 180) / Math.PI;
-  }
-
-  private processLandmarks(landmarks: NormalizedLandmarkList) {
-    const leftShoulder = landmarks[11];
-    const leftElbow = landmarks[13];
-    const leftWrist = landmarks[15];
-    const rightShoulder = landmarks[12];
-    const rightElbow = landmarks[14];
-    const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftKnee = landmarks[25];
-    const rightKnee = landmarks[26];
-    const leftAnkle = landmarks[27];
-    const rightAnkle = landmarks[28];
-    const leftFoot = landmarks[31];
-    const rightFoot = landmarks[32];
-
-    if (
-      !leftShoulder ||
-      !leftElbow ||
-      !leftWrist ||
-      !rightShoulder ||
-      !rightElbow ||
-      !rightWrist
-    ) {
-      return;
-    }
-
-    const legVisible = [
-      leftHip,
-      rightHip,
-      leftKnee,
-      rightKnee,
-      leftAnkle,
-      rightAnkle,
-      leftFoot,
-      rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > 0.3);
-
-    const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
-    const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
-    const avgAngle = (leftAngle + rightAngle) / 2;
-
-    if (avgAngle < 100 && !this.isDown) {
-      if (legVisible) {
-        this.isDown = true;
-        this.legSeen = true;
-      }
-    }
-
-    if (avgAngle > 160 && this.isDown) {
-      this.isDown = false;
-      if (this.legSeen) {
-        this.count++;
-      }
-      this.legSeen = false;
-    }
-  }
-
-  reset() {
-    this.count = 0;
-    this.isDown = false;
-    this.legSeen = false;
-    this.landmarks = null;
-  }
-
-  getCount() {
-    return this.count;
-  }
-
-  getLandmarks() {
-    return this.landmarks;
-  }
-
-  isReady() {
-    return this.isInitialized;
-  }
-
-  cleanup() {
-    this.pose.reset();
-  }
-}
+import {
+  PushupDetector,
+  POSE_LANDMARK_NAMES,
+  UNIMPORTANT_LANDMARKS
+} from '@/lib/PushupDetector';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
@@ -227,7 +41,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef(new PushupDetector());
+  const detectorRef = useRef<PushupDetector | null>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>(0);
 
@@ -236,7 +50,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [videoReady, setVideoReady] = useState(false);
   const [count, setCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
-  const [zoom, setZoom] = useState([1]);
+  const [zoom, setZoom] = useState<number[]>([1]);
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [hideUnimportant, setHideUnimportant] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
@@ -251,17 +65,18 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Set up pose results callback
+  // Initialize pose detector
   useEffect(() => {
-    detectorRef.current.setOnPoseResults((results) => {
-      console.log('Pose results received:', results ? results.length : 0);
+    const detector = new PushupDetector();
+    detector.setOnPoseResults((results) => {
       setPoseResults(results);
-      if (!modelReady) {
-        setModelReady(true);
-        console.log('Pose detection model ready');
-      }
+      setModelReady(true);
     });
-  }, [modelReady]);
+    detectorRef.current = detector;
+    return () => {
+      detector.cleanup();
+    };
+  }, []);
 
   // Handle video metadata loaded
   const handleVideoLoadedMetadata = useCallback(() => {
@@ -373,7 +188,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       });
     }
 
-    detectorRef.current.reset();
+    detectorRef.current?.reset();
     setCount(0);
     setSessionTime(0);
     startTimeRef.current = Date.now();
@@ -449,54 +264,65 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
-    if (showSkeleton && poseResults && canvasRef.current && videoDimensions.width > 0) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (!ctx) return;
+    let frameId: number;
+    const draw = () => {
+      const pose = detectorRef.current?.getLandmarks();
+      if (showSkeleton && pose && canvasRef.current && videoDimensions.width > 0) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (!ctx) return;
 
-      const canvas = canvasRef.current;
+        const canvas = canvasRef.current;
+        if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
+          canvas.width = videoDimensions.width;
+          canvas.height = videoDimensions.height;
+        }
 
-      if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
-        canvas.width = videoDimensions.width;
-        canvas.height = videoDimensions.height;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const connections = hideUnimportant
+          ? POSE_CONNECTIONS.filter(([a, b]) =>
+              !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
+            )
+          : POSE_CONNECTIONS;
+
+        const landmarksToDraw = hideUnimportant
+          ? pose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
+          : pose;
+
+        drawConnectors(ctx, pose, connections, { color: '#00FF00', lineWidth: 3 });
+        drawLandmarks(ctx, landmarksToDraw, { color: '#FF0000', lineWidth: 2 });
+
+        pose.forEach((lm, idx) => {
+          if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
+          const x = lm.x * canvas.width;
+          const y = lm.y * canvas.height;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '10px Arial';
+          ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
+        });
+
+        [11, 12].forEach(i => drawLandmarks(ctx, [pose[i]], { color: '#FF00FF', radius: 6 }));
+        [23, 24].forEach(i => drawLandmarks(ctx, [pose[i]], { color: '#00FFFF', radius: 6 }));
+
+        const avgConfidence = pose.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / pose.length;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(5, 5, 220, 50);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
+        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
+      } else if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frameId = requestAnimationFrame(draw);
+    };
 
-      const connections = hideUnimportant
-        ? POSE_CONNECTIONS.filter(([a, b]) =>
-            !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
-          )
-        : POSE_CONNECTIONS;
-
-      const landmarksToDraw = hideUnimportant
-        ? poseResults.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
-        : poseResults;
-
-      drawConnectors(ctx, poseResults, connections, { color: '#00FF00', lineWidth: 3 });
-      drawLandmarks(ctx, landmarksToDraw, { color: '#FF0000', lineWidth: 2 });
-
-      poseResults.forEach((lm, idx) => {
-        if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
-        const x = lm.x * canvas.width;
-        const y = lm.y * canvas.height;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '10px Arial';
-        ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
-      });
-
-      [11, 12].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#FF00FF', radius: 6 }));
-      [23, 24].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#00FFFF', radius: 6 }));
-
-      const avgConfidence = poseResults.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / poseResults.length;
-
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(5, 5, 220, 50);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
-      ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
-    }
-  }, [showSkeleton, poseResults, modelReady, videoDimensions, hideUnimportant]);
+    frameId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frameId);
+  }, [showSkeleton, videoDimensions, hideUnimportant, modelReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -507,7 +333,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
-      detectorRef.current.cleanup();
+      detectorRef.current?.cleanup();
     };
   }, []);
 
