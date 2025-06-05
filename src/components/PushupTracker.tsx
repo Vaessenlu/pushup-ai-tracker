@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
 import { POSE_CONNECTIONS, Results as PoseResults } from '@mediapipe/pose';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import drawingUtils from '@mediapipe/drawing_utils';
+const { drawConnectors, drawLandmarks } = drawingUtils;
 import {
   PushupDetector,
   POSE_LANDMARK_NAMES,
