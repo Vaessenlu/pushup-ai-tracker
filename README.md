@@ -49,6 +49,13 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Pose detection
+
+The app uses [Mediapipe Pose](https://developers.google.com/mediapipe) for
+tracking body landmarks. The library is loaded dynamically to keep the bundle
+small. Connection pairs are defined locally in
+`src/lib/poseConstants.ts` to avoid bundling the entire Mediapipe package.
+
 ## How can I deploy this project?
 
 Build the project and serve the files in the `dist` directory on any web server.
