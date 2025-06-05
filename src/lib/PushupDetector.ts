@@ -1,7 +1,6 @@
 // Pose detection and push-up counting logic
-import type { Pose } from '@mediapipe/pose';
-import {
-  POSE_CONNECTIONS,
+import type {
+  Pose,
   Results as PoseResults,
   NormalizedLandmark,
   NormalizedLandmarkList
@@ -214,4 +213,4 @@ export class PushupDetector {
 }
 
 export type { PoseResults };
-export { POSE_CONNECTIONS } from '@mediapipe/pose';
+

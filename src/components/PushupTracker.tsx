@@ -19,8 +19,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
-import { POSE_CONNECTIONS, Results as PoseResults } from '@mediapipe/pose';
+import type { Results as PoseResults } from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import { POSE_CONNECTIONS } from '@/lib/poseConstants';
 import {
   PushupDetector,
   POSE_LANDMARK_NAMES,
