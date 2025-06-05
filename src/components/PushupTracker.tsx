@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
+import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff, Slash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 import { Pose, POSE_CONNECTIONS, Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
@@ -44,6 +44,14 @@ const POSE_LANDMARK_NAMES = [
   'RIGHT_HEEL',
   'LEFT_FOOT_INDEX',
   'RIGHT_FOOT_INDEX'
+];
+
+// Indices of landmarks not relevant for push-up detection (face & fingers)
+const UNIMPORTANT_LANDMARKS = [
+  // face landmarks
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  // finger landmarks
+  17, 18, 19, 20, 21, 22,
 ];
 
 // Enhanced PushupDetector with TensorFlow.js PoseNet
@@ -178,6 +186,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState([1]);
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [hideUnimportant, setHideUnimportant] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
@@ -401,10 +410,21 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      drawConnectors(ctx, poseResults, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-      drawLandmarks(ctx, poseResults, { color: '#FF0000', lineWidth: 2 });
+      const connections = hideUnimportant
+        ? POSE_CONNECTIONS.filter(([a, b]) =>
+            !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
+          )
+        : POSE_CONNECTIONS;
+
+      const landmarksToDraw = hideUnimportant
+        ? poseResults.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
+        : poseResults;
+
+      drawConnectors(ctx, poseResults, connections, { color: '#00FF00', lineWidth: 3 });
+      drawLandmarks(ctx, landmarksToDraw, { color: '#FF0000', lineWidth: 2 });
 
       poseResults.forEach((lm, idx) => {
+        if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
         const x = lm.x * canvas.width;
         const y = lm.y * canvas.height;
         ctx.fillStyle = '#FFFFFF';
@@ -424,7 +444,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
       ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
     }
-  }, [showSkeleton, poseResults, modelReady, videoDimensions]);
+  }, [showSkeleton, poseResults, modelReady, videoDimensions, hideUnimportant]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -549,6 +569,20 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 onCheckedChange={setShowSkeleton}
               />
             </div>
+
+            {/* Hide Unimportant Points Toggle */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Slash className="h-4 w-4" />
+                <label className="text-sm font-medium text-gray-700">
+                  Unwichtige Punkte ausblenden
+                </label>
+              </div>
+              <Switch
+                checked={hideUnimportant}
+                onCheckedChange={setHideUnimportant}
+              />
+            </div>
           </div>
         )}
 
@@ -663,6 +697,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
             <li>• Rote/gelbe Punkte zeigen erkannte Körperteile, grüne Linien das Skelett</li>
             <li>• Magenta Punkte = Schultern, Cyan Punkte = Hüfte (wichtig für Liegestützen)</li>
+            <li>• Aktivere "Unwichtige Punkte ausblenden" um Gesicht und Finger zu verbergen</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>
