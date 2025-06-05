@@ -119,8 +119,35 @@ class PushupDetector {
     const rightShoulder = landmarks[12];
     const rightElbow = landmarks[14];
     const rightWrist = landmarks[16];
+    const leftKnee = landmarks[25];
+    const rightKnee = landmarks[26];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    const leftFoot = landmarks[31];
+    const rightFoot = landmarks[32];
 
-    if (!leftShoulder || !leftElbow || !leftWrist || !rightShoulder || !rightElbow || !rightWrist) {
+    if (
+      !leftShoulder ||
+      !leftElbow ||
+      !leftWrist ||
+      !rightShoulder ||
+      !rightElbow ||
+      !rightWrist
+    ) {
+      return;
+    }
+
+    const legVisible = [
+      leftKnee,
+      rightKnee,
+      leftAnkle,
+      rightAnkle,
+      leftFoot,
+      rightFoot
+    ].some(lm => lm && (lm.visibility ?? 0) > 0.3);
+
+    if (!legVisible) {
+      this.isDown = false;
       return;
     }
 
@@ -698,6 +725,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Rote/gelbe Punkte zeigen erkannte Körperteile, grüne Linien das Skelett</li>
             <li>• Magenta Punkte = Schultern, Cyan Punkte = Hüfte (wichtig für Liegestützen)</li>
             <li>• Aktivere "Unwichtige Punkte ausblenden" um Gesicht und Finger zu verbergen</li>
+            <li>• Gezählt wird nur, wenn mindestens ein Beinpunkt (Knie oder Fuß) sichtbar ist</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>
