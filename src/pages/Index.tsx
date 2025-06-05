@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
-import  PushupTracker  from '@/components/PushupTracker';
+import React, { useState, useEffect } from 'react';
+import PushupTracker from '@/components/PushupTracker';
 import { StatsDisplay } from '@/components/StatsDisplay';
 import { SessionHistory } from '@/components/SessionHistory';
-import { Button } from '@/components/ui/button';
+import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Activity, BarChart3, History, Target } from 'lucide-react';
+import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
+import { saveCommunitySession } from '@/lib/community';
 
 export interface Session {
   id: string;
@@ -19,6 +20,17 @@ export interface Session {
 const Index = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
+  const [communityEmail, setCommunityEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('communityEmail');
+    if (stored) setCommunityEmail(stored);
+  }, []);
+
+  const handleRegister = (email: string) => {
+    setCommunityEmail(email);
+    localStorage.setItem('communityEmail', email);
+  };
 
   const handleSessionComplete = (session: Omit<Session, 'id'>) => {
     const newSession: Session = {
@@ -26,6 +38,13 @@ const Index = () => {
       id: Date.now().toString(),
     };
     setSessions(prev => [newSession, ...prev]);
+    if (communityEmail) {
+      saveCommunitySession({
+        email: communityEmail,
+        date: new Date().toISOString(),
+        count: newSession.count,
+      });
+    }
   };
 
   const totalPushups = sessions.reduce((sum, session) => sum + session.count, 0);
@@ -96,7 +115,7 @@ const Index = () => {
 
         {/* Main Content */}
         <Tabs defaultValue="tracker" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-white shadow-lg">
+          <TabsList className="grid w-full grid-cols-4 bg-white shadow-lg">
             <TabsTrigger value="tracker" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Tracker
@@ -108,6 +127,10 @@ const Index = () => {
             <TabsTrigger value="history" className="flex items-center gap-2">
               <History className="h-4 w-4" />
               Verlauf
+            </TabsTrigger>
+            <TabsTrigger value="community" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Community
             </TabsTrigger>
           </TabsList>
 
@@ -125,6 +148,9 @@ const Index = () => {
 
           <TabsContent value="history">
             <SessionHistory sessions={sessions} />
+          </TabsContent>
+          <TabsContent value="community">
+            <Community email={communityEmail} onRegister={handleRegister} />
           </TabsContent>
         </Tabs>
       </div>
