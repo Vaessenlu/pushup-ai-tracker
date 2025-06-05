@@ -64,7 +64,7 @@ class PushupDetector {
       modelComplexity: 0,
       smoothLandmarks: true,
       enableSegmentation: false,
-      selfieMode: true,
+      selfieMode: false,
     });
 
     this.pose.onResults((results) => {
