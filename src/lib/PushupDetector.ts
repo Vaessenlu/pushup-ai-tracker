@@ -69,12 +69,16 @@ export class PushupDetector {
 
   private async initPose() {
     const mp = await import('@mediapipe/pose');
-    // The package is CommonJS which results in the class being available on the
-    // `default` export when imported dynamically.  In a bundler/ESM environment
-    // `mp.Pose` may be undefined, so we fall back to `mp.default.Pose`.
+    // The package ships as a UMD bundle which doesn't always expose the
+    // constructor via ESM exports.  Some bundlers return an empty module
+    // object on dynamic import.  Fallback to the global `Pose` if necessary.
     const PoseCtor: typeof Pose =
       (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default: { Pose: typeof Pose } }).default.Pose;
+      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
+      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
+    if (!PoseCtor) {
+      throw new Error('Failed to load Pose constructor from @mediapipe/pose');
+    }
     this.pose = new PoseCtor({
       locateFile: (file: string) =>
         `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
