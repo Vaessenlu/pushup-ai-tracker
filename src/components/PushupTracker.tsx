@@ -4,10 +4,28 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff, Slash } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Square,
+  Camera,
+  CameraOff,
+  ZoomIn,
+  ZoomOut,
+  Eye,
+  EyeOff,
+  Slash
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
-import { Pose, POSE_CONNECTIONS, Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+
+import {
+  Pose,
+  POSE_CONNECTIONS,
+  Results as PoseResults,
+  NormalizedLandmark,
+  NormalizedLandmarkList
+} from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
 const POSE_LANDMARK_NAMES = [
