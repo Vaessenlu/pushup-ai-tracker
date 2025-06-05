@@ -4,22 +4,29 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Play, Pause, Square, Camera, CameraOff, ZoomIn, ZoomOut, Eye, EyeOff, Slash } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Square,
+  Camera,
+  CameraOff,
+  ZoomIn,
+  ZoomOut,
+  Eye,
+  EyeOff,
+  Slash
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
-import type {
+
+import {
   Pose,
-  POSE_CONNECTIONS as PoseConnections,
+  POSE_CONNECTIONS,
   Results as PoseResults,
   NormalizedLandmark,
-  NormalizedLandmarkList,
+  NormalizedLandmarkList
 } from '@mediapipe/pose';
-import pose from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-
-const PoseImpl = (pose as any).Pose as typeof Pose;
-const POSE_CONNECTIONS =
-  (pose as any).POSE_CONNECTIONS as PoseConnections;
 
 const POSE_LANDMARK_NAMES = [
   'NOSE',
@@ -76,7 +83,7 @@ class PushupDetector {
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor() {
-    this.pose = new PoseImpl({
+    this.pose = new Pose({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
 
