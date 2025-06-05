@@ -14,12 +14,12 @@ import type {
   NormalizedLandmark,
   NormalizedLandmarkList,
 } from '@mediapipe/pose';
-import '@mediapipe/pose';
+import pose from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
-const PoseImpl = (globalThis as any).Pose as typeof Pose;
+const PoseImpl = (pose as any).Pose as typeof Pose;
 const POSE_CONNECTIONS =
-  (globalThis as any).POSE_CONNECTIONS as PoseConnections;
+  (pose as any).POSE_CONNECTIONS as PoseConnections;
 
 const POSE_LANDMARK_NAMES = [
   'NOSE',
