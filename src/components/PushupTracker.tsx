@@ -10,6 +10,42 @@ import { Session } from '@/pages/Index';
 import { Pose, POSE_CONNECTIONS, Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
+const POSE_LANDMARK_NAMES = [
+  'NOSE',
+  'LEFT_EYE_INNER',
+  'LEFT_EYE',
+  'LEFT_EYE_OUTER',
+  'RIGHT_EYE_INNER',
+  'RIGHT_EYE',
+  'RIGHT_EYE_OUTER',
+  'LEFT_EAR',
+  'RIGHT_EAR',
+  'MOUTH_LEFT',
+  'MOUTH_RIGHT',
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX'
+];
+
 // Enhanced PushupDetector with TensorFlow.js PoseNet
 class PushupDetector {
   private pose: Pose;
@@ -367,6 +403,14 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
       drawConnectors(ctx, poseResults, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
       drawLandmarks(ctx, poseResults, { color: '#FF0000', lineWidth: 2 });
+
+      poseResults.forEach((lm, idx) => {
+        const x = lm.x * canvas.width;
+        const y = lm.y * canvas.height;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '10px Arial';
+        ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
+      });
 
       [11, 12].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#FF00FF', radius: 6 }));
       [23, 24].forEach(i => drawLandmarks(ctx, [poseResults[i]], { color: '#00FFFF', radius: 6 }));
