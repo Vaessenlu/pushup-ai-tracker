@@ -1,11 +1,13 @@
 // Pose detection and push-up counting logic
+import type { Pose } from '@mediapipe/pose';
 import {
-  Pose,
   POSE_CONNECTIONS,
   Results as PoseResults,
   NormalizedLandmark,
   NormalizedLandmarkList
 } from '@mediapipe/pose';
+
+type PoseInstance = Pose;
 
 export const POSE_LANDMARK_NAMES = [
   'NOSE',
@@ -52,7 +54,8 @@ export const UNIMPORTANT_LANDMARKS = [
 ];
 
 export class PushupDetector {
-  private pose: Pose;
+  private pose: PoseInstance | null = null;
+  private initPromise: Promise<void>;
   private isDown = false;
   private count = 0;
   private legSeen = false;
@@ -61,8 +64,13 @@ export class PushupDetector {
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor() {
-    this.pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    this.initPromise = this.initPose();
+  }
+
+  private async initPose() {
+    const mp = await import('@mediapipe/pose');
+    this.pose = new mp.Pose({
+      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
 
     this.pose.setOptions({
@@ -89,8 +97,9 @@ export class PushupDetector {
   }
 
   async detect(videoElement: HTMLVideoElement): Promise<number> {
+    await this.initPromise;
+    if (!this.pose) return this.count;
     if (!this.isInitialized) {
-      // attempt to process frame to trigger initialization
       await this.pose.send({ image: videoElement });
       return this.count;
     }
@@ -187,7 +196,9 @@ export class PushupDetector {
   }
 
   cleanup() {
-    this.pose.reset();
+    if (this.pose) {
+      this.pose.reset();
+    }
   }
 }
 
