@@ -59,6 +59,7 @@ class PushupDetector {
   private pose: Pose;
   private isDown = false;
   private count = 0;
+  private legSeen = false;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
@@ -119,6 +120,8 @@ class PushupDetector {
     const rightShoulder = landmarks[12];
     const rightElbow = landmarks[14];
     const rightWrist = landmarks[16];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
     const leftKnee = landmarks[25];
     const rightKnee = landmarks[26];
     const leftAnkle = landmarks[27];
@@ -138,36 +141,40 @@ class PushupDetector {
     }
 
     const legVisible = [
+      leftHip,
+      rightHip,
       leftKnee,
       rightKnee,
       leftAnkle,
       rightAnkle,
       leftFoot,
       rightFoot
-    ].some(lm => lm && (lm.visibility ?? 0) > 0.3);
-
-    if (!legVisible) {
-      this.isDown = false;
-      return;
-    }
+    ].some((lm) => lm && (lm.visibility ?? 0) > 0.3);
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
     if (avgAngle < 100 && !this.isDown) {
-      this.isDown = true;
+      if (legVisible) {
+        this.isDown = true;
+        this.legSeen = true;
+      }
     }
 
     if (avgAngle > 160 && this.isDown) {
       this.isDown = false;
-      this.count++;
+      if (this.legSeen) {
+        this.count++;
+      }
+      this.legSeen = false;
     }
   }
 
   reset() {
     this.count = 0;
     this.isDown = false;
+    this.legSeen = false;
     this.landmarks = null;
   }
 
