@@ -58,73 +58,6 @@ small. Connection pairs are defined locally in
 
 ## How can I deploy this project?
 
-Build the project and serve the files in the `dist` directory on any web server.
-You can also host it using the Node.js server described below.
-
-## Eigenen Server hosten und Daten dauerhaft speichern
-
-benötigen Sie einen kleinen Node.js‐Server, der die gebaute React‑App ausliefert
-und eingehende Ergebnisse in einer Datenbank speichert.
-
-### 1. Frontend bauen
-
-Führen Sie im Projektverzeichnis folgende Befehle aus, um die Produktionsdateien
-im Ordner `dist` zu erstellen:
-
-```bash
-npm install
-npm run build
-```
-
-### 2. Node.js‑Server erstellen
-
-Erstellen Sie z. B. einen Ordner `server` und initialisieren Sie dort ein neues
-Projekt. Installieren Sie Express und eine Datenbankbibliothek (hier SQLite als
-einfaches Beispiel):
-
-```bash
-mkdir server
-cd server
-npm init -y
-npm install express sqlite3 cors
-```
-
-Legen Sie anschließend eine Datei `index.js` an und füllen Sie sie etwa wie
-folgt:
-
-
-```javascript
-import express from 'express';
-import sqlite3 from 'sqlite3';
-import path from 'path';
-
-const app = express();
-const db = new sqlite3.Database('db.sqlite');
-
-db.run('CREATE TABLE IF NOT EXISTS sessions (email TEXT, date TEXT, count INTEGER)');
-
-app.use(express.json());
-app.use(express.static(path.join('..', 'dist')));
-
-app.post('/api/session', (req, res) => {
-  const { email, date, count } = req.body;
-  db.run('INSERT INTO sessions (email, date, count) VALUES (?, ?, ?)', [email, date, count], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.sendStatus(200);
-  });
-});
-
-app.listen(3000, () => console.log('Server läuft auf http://localhost:3000'));
-```
-
-Damit wird das gebaute Frontend ausgeliefert und die API `/api/session`
-speichert Ergebnisse in der Datenbank `db.sqlite`.
-
-### 3. Verbindung aus dem Frontend herstellen
-
-Passen Sie die Funktionen zum Speichern der Community‑Sessions so an, dass sie
-einen `fetch`‑Aufruf an Ihren Server senden, statt in `localStorage`
-zu schreiben.
 
 ### Nutzung von Supabase
 
@@ -145,21 +78,16 @@ Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Dana
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
 
-Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
-und Highscore-Abfragen verwendet. Für das neue Forumsmodul benötigen Sie
-zusätzlich eine Tabelle `posts` mit den Spalten `id`, `email`, `content` und
-`created_at`.
-### Forum-Modul
 
-Eingeloggte Nutzer können im Forum Beiträge verfassen. Die Daten werden in der `posts`-Tabelle gespeichert. Stelle sicher, dass RLS deaktiviert ist oder geeignete Policies existieren, damit alle angemeldeten Benutzer Beiträge lesen und schreiben können.
+Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
+und Highscore-Abfragen verwendet.
 
 
 ### 4. Deployment
 
-Kopieren Sie den Inhalt des `dist`‑Ordners und den `server`‑Ordner auf Ihren
-Server oder hosten Sie beides auf Plattformen wie Vercel, Netlify oder einem
-eigenen VPS. Starten Sie den Node‑Server und rufen Sie anschließend Ihre Domain
-im Browser auf. Die Daten werden jetzt permanent in der Datenbank gespeichert.
+Kopieren Sie den Inhalt des `dist`‑Ordners auf einen Webserver oder hosten Sie ihn
+auf Plattformen wie Vercel oder Netlify. Rufen Sie anschließend Ihre Domain im
+Browser auf. Die Daten werden nun dauerhaft über Supabase gespeichert.
 
 
 ### 5. Deployment auf Netlify

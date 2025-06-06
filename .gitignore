@@ -26,7 +26,6 @@ dist-ssr
 # Ignore Python requirements file
 requirements.txt
 
-# Database
-server/db.sqlite
+# Environment
 .env
 

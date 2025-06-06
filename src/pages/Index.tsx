@@ -4,10 +4,9 @@ import PushupTracker from '@/components/PushupTracker';
 import { StatsDisplay } from '@/components/StatsDisplay';
 import { SessionHistory } from '@/components/SessionHistory';
 import Community from '@/components/Community';
-import Forum from '@/components/Forum';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Activity, BarChart3, History, Target, Users, MessageCircle } from 'lucide-react';
+import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
 import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 
 export interface Session {
@@ -143,10 +142,6 @@ const Index = () => {
               <Users className="h-4 w-4" />
               Community
             </TabsTrigger>
-            <TabsTrigger value="forum" className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4" />
-              Forum
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="tracker">
@@ -166,9 +161,6 @@ const Index = () => {
           </TabsContent>
           <TabsContent value="community">
             <Community email={communityEmail} token={communityToken} onAuth={handleRegister} />
-          </TabsContent>
-          <TabsContent value="forum">
-            <Forum token={communityToken} />
           </TabsContent>
         </Tabs>
       </div>
