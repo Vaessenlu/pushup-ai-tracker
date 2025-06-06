@@ -62,9 +62,14 @@ small. Connection pairs are defined locally in
 ### Nutzung von Supabase
 
 Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
-einfach eine Tabelle `sessions` mit den Spalten `email`, `username`, `date` und `count` an.
-Fehlt die Spalte `username`, wird nur die E‑Mail angezeigt. Hinterlegen Sie anschließend Ihre Supabase URL und
-den Anon Key in einer Datei `.env` im Projektwurzelverzeichnis:
+eine Tabelle `sessions` an. Diese sollte mindestens die Spalten `email`, `date`
+und `count` (integer) enthalten. Optional kann eine Spalte `username`
+vorhanden sein. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
+Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
+verwendet die App automatisch einen Fallback.
+
+Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
+`.env` im Projektwurzelverzeichnis:
 
 ```
 VITE_SUPABASE_URL=<your-url>
