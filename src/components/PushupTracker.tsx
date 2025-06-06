@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
 import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import drawingUtils from '@mediapipe/drawing_utils/drawing_utils.js';
+const { drawConnectors, drawLandmarks } = drawingUtils;
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
 import {
   PushupDetector,
