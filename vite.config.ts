@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   plugins: [
     react(),
   ],

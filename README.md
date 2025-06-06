@@ -141,6 +141,9 @@ NEXT_PUBLIC_SUPABASE_URL=<your-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 
+Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
+auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
+
 Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
 und Highscore-Abfragen verwendet. Für das neue Forumsmodul benötigen Sie
 zusätzlich eine Tabelle `posts` mit den Spalten `id`, `email`, `content` und
