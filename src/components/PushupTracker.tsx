@@ -24,12 +24,16 @@ let drawConnectors: typeof import('@mediapipe/drawing_utils').drawConnectors | u
 let drawLandmarks: typeof import('@mediapipe/drawing_utils').drawLandmarks | undefined;
 
 // Load drawing utils dynamically to avoid tree-shaking issues
-import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: any) => {
+import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: unknown) => {
+  // Dynamic module may have different shapes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = mod as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const utils =
-    mod.drawingUtils ??
-    mod.default ??
-    (globalThis as any).drawingUtils ??
-    mod;
+    m.drawingUtils ??
+    m.default ??
+    (globalThis as Record<string, unknown>).drawingUtils ??
+    m;
   drawConnectors = utils.drawConnectors;
   drawLandmarks = utils.drawLandmarks;
 });
