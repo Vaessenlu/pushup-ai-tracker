@@ -155,8 +155,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
-          width: { ideal: 640 }, 
-          height: { ideal: 480 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           facingMode: 'user'
         }
       });
@@ -326,6 +326,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        const mirroredPose = pose.map((lm) => ({ ...lm, x: 1 - lm.x }));
+
         const connections = hideUnimportant
           ? POSE_CONNECTIONS.filter(([a, b]) =>
               !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
@@ -333,11 +335,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           : POSE_CONNECTIONS;
 
         const landmarksToDraw = hideUnimportant
-          ? pose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
-          : pose;
+          ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
+          : mirroredPose;
 
         if (drawConnectors && drawLandmarks) {
-          drawConnectors(ctx, pose, connections, {
+          drawConnectors(ctx, mirroredPose, connections, {
             color: '#00FF00',
             lineWidth: 3,
           });
@@ -347,7 +349,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           });
         }
 
-        pose.forEach((lm, idx) => {
+        mirroredPose.forEach((lm, idx) => {
           if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
           const x = lm.x * canvas.width;
           const y = lm.y * canvas.height;
@@ -358,21 +360,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         if (drawLandmarks) {
           [11, 12].forEach((i) =>
-            drawLandmarks!(ctx, [pose[i]], { color: '#FF00FF', radius: 6 })
+            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#FF00FF', radius: 6 })
           );
           [23, 24].forEach((i) =>
-            drawLandmarks!(ctx, [pose[i]], { color: '#00FFFF', radius: 6 })
+            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#00FFFF', radius: 6 })
           );
         }
 
         const avgConfidence = pose.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / pose.length;
 
+        const overlayY = canvas.height - 55;
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(5, 5, 220, 50);
+        ctx.fillRect(5, overlayY, 220, 50);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 14px Arial';
-        ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
-        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
+        ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, overlayY + 20);
+        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, overlayY + 40);
       } else if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
         ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -411,17 +414,17 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform scale-x-[-1]"
-                  style={{ 
-                    transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
+                  className="w-full h-full object-cover transform"
+                  style={{
+                    transform: `scale(${zoom[0]}) scaleX(-1)`,
                     transformOrigin: 'center center'
                   }}
                 />
                 <canvas
                   ref={canvasRef}
                   className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                  style={{ 
-                    transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
+                  style={{
+                    transform: `scale(${zoom[0]})`,
                     transformOrigin: 'center center',
                     display: showSkeleton ? 'block' : 'none',
                     border: showSkeleton ? '2px solid red' : 'none' // Debug border
