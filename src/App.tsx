@@ -6,8 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import LoginPage from "./pages/Login";
 import { supabase } from "@/lib/supabaseClient";
-import AuthForm from "@/components/AuthForm";
 import type { User } from "@supabase/supabase-js";
 
 const queryClient = new QueryClient();
@@ -25,12 +25,14 @@ const App = () => {
     };
   }, []);
 
-  const content = !user ? (
-    <AuthForm onAuth={() => supabase.auth.getUser().then(({ data }) => setUser(data.user))} />
-  ) : (
+  const content = (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Index user={user} />} />
+        <Route
+          path="/login"
+          element={<LoginPage onAuth={() => supabase.auth.getUser().then(({ data }) => setUser(data.user))} />}
+        />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

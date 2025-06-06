@@ -5,10 +5,12 @@ import { StatsDisplay } from '@/components/StatsDisplay';
 import { SessionHistory } from '@/components/SessionHistory';
 import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
 import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
+import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 
 export interface Session {
@@ -20,7 +22,7 @@ export interface Session {
 }
 
 interface IndexProps {
-  user: User;
+  user?: User | null;
 }
 
 const Index: React.FC<IndexProps> = ({ user }) => {
@@ -38,6 +40,10 @@ const Index: React.FC<IndexProps> = ({ user }) => {
 
   useEffect(() => {
     async function load() {
+      if (!user) {
+        setSessions([]);
+        return;
+      }
       const { data } = await supabase
         .from('sessions')
         .select('id, count, duration, created_at')
@@ -59,7 +65,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
     }
     load();
-  }, [user.id]);
+  }, [user?.id]);
 
   const handleRegister = (email: string, token: string) => {
     setCommunityEmail(email);
@@ -110,6 +116,17 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-end mb-4">
+          {user ? (
+            <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+              Logout
+            </Button>
+          ) : (
+            <Link to="/login">
+              <Button variant="outline">Login / Registrieren</Button>
+            </Link>
+          )}
+        </div>
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
