@@ -70,13 +70,11 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     load();
   }, [user?.id]);
 
-  const handleRegister = (email: string, token: string, username?: string) => {
+  const handleRegister = (email: string, token: string, username: string) => {
     setCommunityEmail(email);
     setCommunityToken(token);
-    if (username) {
-      setCommunityUsername(username);
-      localStorage.setItem('communityUsername', username);
-    }
+    setCommunityUsername(username);
+    localStorage.setItem('communityUsername', username);
     localStorage.setItem('communityEmail', email);
     localStorage.setItem('communityToken', token);
   };

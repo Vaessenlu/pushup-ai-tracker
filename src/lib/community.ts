@@ -34,7 +34,7 @@ import { supabase } from './supabaseClient';
 export async function register(
   email: string,
   password: string,
-  username?: string,
+  username: string,
 ): Promise<string> {
   const { data, error } = await supabase.auth.signUp({
     email,

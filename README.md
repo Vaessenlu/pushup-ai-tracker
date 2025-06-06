@@ -62,9 +62,8 @@ small. Connection pairs are defined locally in
 ### Nutzung von Supabase
 
 Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
-eine Tabelle `sessions` an. Diese sollte mindestens die Spalten `email`, `date`
-und `count` (integer) enthalten. Optional kann eine Spalte `username`
-vorhanden sein. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
+eine Tabelle `sessions` an. Diese sollte die Spalten `email`, `username`, `date`
+und `count` (integer) enthalten. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
 Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
 verwendet die App automatisch einen Fallback. Nutzt Ihre bestehende Tabelle
 statt `email` eine Spalte `user_id` und `created_at`, erkennt die App dies und
@@ -84,7 +83,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
 
-Bei der Registrierung kannst du optional einen Benutzernamen angeben. Dieser wird zusammen mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
+Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
