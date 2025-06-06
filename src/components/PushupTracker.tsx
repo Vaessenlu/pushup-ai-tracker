@@ -43,6 +43,7 @@ import {
   POSE_LANDMARK_NAMES,
   UNIMPORTANT_LANDMARKS
 } from '@/lib/PushupDetector';
+import { supabase } from '@/lib/supabaseClient';
 import {
   PushupDetector,
   POSE_LANDMARK_NAMES,
@@ -53,12 +54,14 @@ interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
   isTracking: boolean;
   setIsTracking: (tracking: boolean) => void;
+  user?: { id: string } | null;
 }
 
 export const PushupTracker: React.FC<PushupTrackerProps> = ({
   onSessionComplete,
   isTracking,
-  setIsTracking
+  setIsTracking,
+  user,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -228,12 +231,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setStatus('paused');
   }, [setIsTracking]);
 
-  const stopTracking = useCallback(() => {
+  const stopTracking = useCallback(async () => {
     const endTime = Date.now();
     const duration = Math.round((endTime - startTimeRef.current) / 1000);
     const avgTimePerRep = count > 0 ? duration / count : 0;
 
     if (count > 0) {
+      if (user?.id) {
+        try {
+          await supabase.from('sessions').insert({
+            user_id: user.id,
+            count,
+            duration,
+          });
+        } catch (e) {
+          console.error('Supabase insert failed', e);
+        }
+      }
+
       onSessionComplete({
         date: new Date(),
         count,
@@ -251,7 +266,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setStatus('ready');
     setCount(0);
     setSessionTime(0);
-  }, [count, onSessionComplete, setIsTracking, toast]);
+  }, [count, onSessionComplete, setIsTracking, toast, user]);
 
   // Animation loop for pose detection
   useEffect(() => {
@@ -554,30 +569,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               
               {(status === 'tracking' || status === 'paused') && (
                 <Button 
-                  onClick={() => {
-                    const endTime = Date.now();
-                    const duration = Math.round((endTime - startTimeRef.current) / 1000);
-                    const avgTimePerRep = count > 0 ? duration / count : 0;
-
-                    if (count > 0) {
-                      onSessionComplete({
-                        date: new Date(),
-                        count,
-                        duration,
-                        avgTimePerRep,
-                      });
-
-                      toast({
-                        title: "Session beendet!",
-                        description: `${count} Liegestützen in ${duration}s absolviert!`,
-                      });
-                    }
-
-                    setIsTracking(false);
-                    setStatus('ready');
-                    setCount(0);
-                    setSessionTime(0);
-                  }}
+                  onClick={stopTracking}
                   variant="destructive"
                 >
                   <Square className="h-4 w-4 mr-2" />

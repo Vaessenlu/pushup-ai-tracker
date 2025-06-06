@@ -5,9 +5,13 @@ import { StatsDisplay } from '@/components/StatsDisplay';
 import { SessionHistory } from '@/components/SessionHistory';
 import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
 import { saveCommunitySession, saveSessionServer } from '@/lib/community';
+import { supabase } from '@/lib/supabaseClient';
+import { Link } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 
 export interface Session {
   id: string;
@@ -17,7 +21,11 @@ export interface Session {
   avgTimePerRep: number;
 }
 
-const Index = () => {
+interface IndexProps {
+  user?: User | null;
+}
+
+const Index: React.FC<IndexProps> = ({ user }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
@@ -30,6 +38,35 @@ const Index = () => {
     if (storedToken) setCommunityToken(storedToken);
   }, []);
 
+  useEffect(() => {
+    async function load() {
+      if (!user) {
+        setSessions([]);
+        return;
+      }
+      const { data } = await supabase
+        .from('sessions')
+        .select('id, count, duration, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (data) {
+        setSessions(
+          data.map((s) => ({
+            id: s.id as string,
+            date: new Date(s.created_at as string),
+            count: s.count as number,
+            duration: s.duration as number,
+            avgTimePerRep:
+              (s.duration as number) && (s.count as number)
+                ? (s.duration as number) / (s.count as number)
+                : 0,
+          }))
+        );
+      }
+    }
+    load();
+  }, [user?.id]);
+
   const handleRegister = (email: string, token: string) => {
     setCommunityEmail(email);
     setCommunityToken(token);
@@ -37,11 +74,25 @@ const Index = () => {
     localStorage.setItem('communityToken', token);
   };
 
-  const handleSessionComplete = (session: Omit<Session, 'id'>) => {
-    const newSession: Session = {
+  const handleSessionComplete = async (session: Omit<Session, 'id'>) => {
+    let newSession: Session = {
       ...session,
       id: Date.now().toString(),
     };
+    if (user) {
+      try {
+        const { data } = await supabase
+          .from('sessions')
+          .insert({ user_id: user.id, count: session.count, duration: session.duration })
+          .select('id')
+          .single();
+        if (data?.id) {
+          newSession = { ...newSession, id: data.id };
+        }
+      } catch (e) {
+        console.error('Supabase insert failed', e);
+      }
+    }
     setSessions(prev => [newSession, ...prev]);
     if (communityToken) {
       saveSessionServer(communityToken, {
@@ -65,6 +116,17 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-end mb-4">
+          {user ? (
+            <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+              Logout
+            </Button>
+          ) : (
+            <Link to="/login">
+              <Button variant="outline">Login / Registrieren</Button>
+            </Link>
+          )}
+        </div>
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -145,10 +207,11 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="tracker">
-            <PushupTracker 
+            <PushupTracker
               onSessionComplete={handleSessionComplete}
               isTracking={isTracking}
               setIsTracking={setIsTracking}
+              user={user}
             />
           </TabsContent>
 
