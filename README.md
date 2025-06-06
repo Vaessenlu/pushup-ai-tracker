@@ -89,6 +89,9 @@ Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
 mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 Du meldest dich danach mit deiner E-Mail-Adresse und deinem Passwort an.
 Jede E-Mail-Adresse ist genau einem Benutzernamen zugeordnet.
+Die Highscores im "Community"-Tab kannst du auch ohne Login einsehen. Darunter
+findest du zwei getrennte Formulare: eines zum Einloggen (E-Mail und Passwort)
+und eines zur Registrierung (Benutzername, E-Mail und Passwort).
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
@@ -96,8 +99,8 @@ auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
 
 Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
 und Highscore-Abfragen verwendet. Melde dich im "Community"-Tab an, damit deine
-Sessions gespeichert werden und du die Highscores sehen kannst. Stelle sicher,
-dass die Tabelle `sessions` öffentlich lesbar ist oder passende
+Sessions gespeichert werden. Die Highscores sind auch ohne Login sichtbar.
+Stelle sicher, dass die Tabelle `sessions` öffentlich lesbar ist oder passende
 Row-Level-Security-Regeln eingerichtet sind.
 
 
