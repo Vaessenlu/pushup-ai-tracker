@@ -45,7 +45,7 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ sessions }) => {
     <div className="space-y-4">
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+        <Card className="p-4 bg-gradient-to-r from-orange-400 to-orange-500 text-white">
           <div className="flex items-center gap-3">
             <Calendar className="h-6 w-6" />
             <div>
@@ -55,7 +55,7 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ sessions }) => {
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-r from-green-500 to-green-600 text-white">
+        <Card className="p-4 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white">
           <div className="flex items-center gap-3">
             <Trophy className="h-6 w-6" />
             <div>
@@ -65,7 +65,7 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ sessions }) => {
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+        <Card className="p-4 bg-gradient-to-r from-pink-500 to-pink-600 text-white">
           <div className="flex items-center gap-3">
             <Clock className="h-6 w-6" />
             <div>

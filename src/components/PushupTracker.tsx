@@ -446,7 +446,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 
                 {/* Count Display */}
                 <div className="absolute top-4 right-4">
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full">
+                  <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-3 rounded-full">
                     <span className="text-3xl font-bold">{count}</span>
                   </div>
                 </div>
@@ -520,7 +520,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           {!cameraEnabled ? (
             <Button 
               onClick={enableCamera}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              className="bg-gradient-to-r from-orange-500 to-pink-600 hover:from-orange-600 hover:to-pink-700"
             >
               <Camera className="h-4 w-4 mr-2" />
               Kamera aktivieren
@@ -538,7 +538,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               {status === 'ready' && videoReady && modelReady && (
                 <Button 
                   onClick={startTracking}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
                   Start
@@ -583,7 +583,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     setIsTracking(true);
                     setStatus('tracking');
                   }}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
                   Fortsetzen

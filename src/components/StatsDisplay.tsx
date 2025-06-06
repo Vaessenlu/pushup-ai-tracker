@@ -62,7 +62,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
     <div className="space-y-6">
       {/* Key Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+        <Card className="p-6 bg-gradient-to-br from-orange-400 to-orange-500 text-white">
           <div className="flex items-center gap-3">
             <TrendingUp className="h-8 w-8" />
             <div>
@@ -72,7 +72,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-green-500 to-green-600 text-white">
+        <Card className="p-6 bg-gradient-to-br from-yellow-400 to-yellow-500 text-white">
           <div className="flex items-center gap-3">
             <Target className="h-8 w-8" />
             <div>
@@ -82,7 +82,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+        <Card className="p-6 bg-gradient-to-br from-pink-500 to-pink-600 text-white">
           <div className="flex items-center gap-3">
             <Clock className="h-8 w-8" />
             <div>
@@ -92,7 +92,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-orange-500 to-red-500 text-white">
+        <Card className="p-6 bg-gradient-to-br from-rose-400 to-red-500 text-white">
           <div className="flex items-center gap-3">
             <Zap className="h-8 w-8" />
             <div>
