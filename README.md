@@ -66,9 +66,11 @@ eine Tabelle `sessions` an. Diese sollte mindestens die Spalten `email`, `date`
 und `count` (integer) enthalten. Optional kann eine Spalte `username`
 vorhanden sein. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
 Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
-verwendet die App automatisch einen Fallback. Ein Fehler "400 Bad Request" weist
-oft auf eine abweichende Tabellendefinition hin – kontrolliere in diesem Fall
-die Spaltennamen und -typen der Tabelle `sessions`.
+verwendet die App automatisch einen Fallback. Nutzt Ihre bestehende Tabelle
+statt `email` eine Spalte `user_id` und `created_at`, erkennt die App dies und
+fällt ebenfalls darauf zurück. Ein Fehler "400 Bad Request" weist oft auf eine
+abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
+Spaltennamen und -typen der Tabelle `sessions`.
 
 Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
 `.env` im Projektwurzelverzeichnis:
