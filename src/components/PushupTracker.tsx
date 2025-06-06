@@ -76,7 +76,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [count, setCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
-  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [hideUnimportant, setHideUnimportant] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
@@ -155,8 +155,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
-          width: { ideal: 640 }, 
-          height: { ideal: 480 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           facingMode: 'user'
         }
       });
@@ -270,22 +270,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if ((isTracking || showSkeleton) && videoRef.current && videoReady && videoDimensions.width > 0) {
+    if (cameraEnabled && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
           if (isTracking) {
             setCount(newCount);
 
-            // Update session time
+            // Update session time only while tracking
             const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
             setSessionTime(currentTime);
           }
+
+          // Update pose results for skeleton drawing and model status
+          setPoseResults(detectorRef.current.getLandmarks());
+          setModelReady(detectorRef.current.isReady());
         }
 
-        if (isTracking || showSkeleton) {
-          animationRef.current = requestAnimationFrame(animate);
-        }
+        animationRef.current = requestAnimationFrame(animate);
       };
 
       console.log('Starting pose detection animation loop');
@@ -297,14 +299,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, showSkeleton, videoReady, videoDimensions]);
+  }, [cameraEnabled, isTracking, videoReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
+    if (!showSkeleton) {
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+      return;
+    }
+
     let frameId: number;
     const draw = () => {
       const pose = detectorRef.current?.getLandmarks();
-      if (showSkeleton && pose && canvasRef.current && videoDimensions.width > 0) {
+      if (pose && canvasRef.current && videoDimensions.width > 0) {
         const ctx = canvasRef.current.getContext('2d');
         if (!ctx) return;
 
@@ -316,6 +326,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        const mirroredPose = pose.map((lm) => ({ ...lm, x: 1 - lm.x }));
+
         const connections = hideUnimportant
           ? POSE_CONNECTIONS.filter(([a, b]) =>
               !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
@@ -323,11 +335,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           : POSE_CONNECTIONS;
 
         const landmarksToDraw = hideUnimportant
-          ? pose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
-          : pose;
+          ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
+          : mirroredPose;
 
         if (drawConnectors && drawLandmarks) {
-          drawConnectors(ctx, pose, connections, {
+          drawConnectors(ctx, mirroredPose, connections, {
             color: '#00FF00',
             lineWidth: 3,
           });
@@ -337,7 +349,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           });
         }
 
-        pose.forEach((lm, idx) => {
+        mirroredPose.forEach((lm, idx) => {
           if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
           const x = lm.x * canvas.width;
           const y = lm.y * canvas.height;
@@ -348,21 +360,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         if (drawLandmarks) {
           [11, 12].forEach((i) =>
-            drawLandmarks!(ctx, [pose[i]], { color: '#FF00FF', radius: 6 })
+            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#FF00FF', radius: 6 })
           );
           [23, 24].forEach((i) =>
-            drawLandmarks!(ctx, [pose[i]], { color: '#00FFFF', radius: 6 })
+            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#00FFFF', radius: 6 })
           );
         }
 
         const avgConfidence = pose.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / pose.length;
 
+        const overlayY = canvas.height - 55;
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(5, 5, 220, 50);
+        ctx.fillRect(5, overlayY, 220, 50);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 14px Arial';
-        ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, 25);
-        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, 45);
+        ctx.fillText(`Confidence: ${(avgConfidence * 100).toFixed(1)}%`, 10, overlayY + 20);
+        ctx.fillText(`Model: ${modelReady ? 'Ready' : 'Loading...'}`, 10, overlayY + 40);
       } else if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
         ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -393,7 +406,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       <div className="space-y-6">
         {/* Camera Section */}
         <div className="relative">
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
+          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative max-w-xl mx-auto max-h-[50vh]">
             {cameraEnabled ? (
               <>
                 <video
@@ -401,17 +414,17 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform scale-x-[-1]"
-                  style={{ 
-                    transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
+                  className="w-full h-full object-cover transform"
+                  style={{
+                    transform: `scale(${zoom[0]}) scaleX(-1)`,
                     transformOrigin: 'center center'
                   }}
                 />
                 <canvas
                   ref={canvasRef}
                   className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                  style={{ 
-                    transform: `scale(${zoom[0]}) scaleX(-${zoom[0]})`,
+                  style={{
+                    transform: `scale(${zoom[0]})`,
                     transformOrigin: 'center center',
                     display: showSkeleton ? 'block' : 'none',
                     border: showSkeleton ? '2px solid red' : 'none' // Debug border
@@ -446,7 +459,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 
                 {/* Count Display */}
                 <div className="absolute top-4 right-4">
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full">
+                  <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-3 rounded-full">
                     <span className="text-3xl font-bold">{count}</span>
                   </div>
                 </div>
@@ -520,7 +533,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           {!cameraEnabled ? (
             <Button 
               onClick={enableCamera}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              className="bg-gradient-to-r from-orange-500 to-pink-600 hover:from-orange-600 hover:to-pink-700"
             >
               <Camera className="h-4 w-4 mr-2" />
               Kamera aktivieren
@@ -538,7 +551,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               {status === 'ready' && videoReady && modelReady && (
                 <Button 
                   onClick={startTracking}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
                   Start
@@ -583,7 +596,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     setIsTracking(true);
                     setStatus('tracking');
                   }}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
                   Fortsetzen

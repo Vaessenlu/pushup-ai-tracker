@@ -1,4 +1,4 @@
-# Push-Up AI Tracker
+# Push Up Tracker
 
 This repository contains the code for a push-up counter webapp.
 ## How can I edit this code?
