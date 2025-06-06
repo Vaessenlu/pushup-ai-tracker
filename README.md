@@ -65,13 +65,12 @@ Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
 eine Tabelle `sessions` an. Diese sollte die Spalten `email`, `username`, `date`
 und `count` (integer) enthalten. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
 Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
-verwendet die App automatisch einen Fallback. Nutzt Ihre bestehende Tabelle
+verwendet die App automatisch einen Fallback. Nutzt deine bestehende Tabelle
 statt `email` eine Spalte `user_id` und `created_at`, erkennt die App dies und
-fällt ebenfalls darauf zurück. Befindet sich zusätzlich eine Spalte `username`
-in dieser Variante, wird auch dort der Benutzername gespeichert und in den
-Highscores angezeigt. Ein Fehler "400 Bad Request" weist oft auf eine
-abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
-Spaltennamen und -typen der Tabelle `sessions`.
+fällt ebenfalls darauf zurück. Damit auch in diesem Schema der Benutzername
+angezeigt wird, solltest du zusätzlich eine Spalte `username` anlegen. Ein
+Fehler "400 Bad Request" weist oft auf eine abweichende Tabellendefinition hin –
+kontrolliere in diesem Fall die Spaltennamen und -typen der Tabelle `sessions`.
 
 Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
 `.env` im Projektwurzelverzeichnis:

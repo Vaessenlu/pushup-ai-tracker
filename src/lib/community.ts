@@ -59,7 +59,6 @@ export async function saveSessionServer(
   token: string,
   session: Omit<CommunitySession, 'email' | 'username'>,
 ) {
-  // ensure current session
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
 
@@ -69,74 +68,28 @@ export async function saveSessionServer(
   const username = (userData.user?.user_metadata as { username?: string })?.username;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
-  await supabase
-    .from('sessions')
-    .insert({ email, username, date: session.date, count: session.count })
-    .catch(async err => {
-      const msg = (err as { message?: string }).message || '';
-      const code = (err as { code?: string }).code;
-      if (msg.includes('username')) {
-        await supabase.from('sessions').insert({
-          email,
-          date: session.date,
-          count: session.count,
-        });
-      } else if (msg.includes('email') || code === '42703') {
-        try {
-          await supabase
-            .from('sessions')
-            .insert({ user_id: userId, username, created_at: session.date, count: session.count });
-        } catch (e2) {
-          const msg2 = (e2 as { message?: string }).message || '';
-          if (msg2.includes('username')) {
-            await supabase
-              .from('sessions')
-              .insert({ user_id: userId, created_at: session.date, count: session.count });
-          } else {
-            throw e2;
-          }
-        }
-      } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-        const onlyDate = session.date.split('T')[0];
-        try {
-          await supabase.from('sessions').insert({
-            email,
-            username,
-            date: onlyDate,
-            count: session.count,
-          });
-        } catch (e2) {
-          const msg2 = (e2 as { message?: string }).message || '';
-          const code2 = (e2 as { code?: string }).code;
-          if (msg2.includes('username')) {
-            await supabase.from('sessions').insert({
-              email,
-              date: onlyDate,
-              count: session.count,
-            });
-          } else if (msg2.includes('email') || code2 === '42703') {
-            try {
-              await supabase
-                .from('sessions')
-                .insert({ user_id: userId, username, created_at: onlyDate, count: session.count });
-            } catch (e3) {
-              const msg3 = (e3 as { message?: string }).message || '';
-              if (msg3.includes('username')) {
-                await supabase
-                  .from('sessions')
-                  .insert({ user_id: userId, created_at: onlyDate, count: session.count });
-              } else {
-                throw e3;
-              }
-            }
-          } else {
-            throw e2;
-          }
-        }
-      } else {
-        throw err;
-      }
-    });
+  const base = { count: session.count } as Record<string, unknown>;
+  const attempts: Record<string, unknown>[] = [
+    { email, username, date: session.date, ...base },
+    { email, date: session.date, ...base },
+    { user_id: userId, username, created_at: session.date, ...base },
+    { user_id: userId, created_at: session.date, ...base },
+  ];
+
+  const dateOnly = session.date.split('T')[0];
+
+  for (const values of attempts) {
+    let { error } = await supabase.from('sessions').insert(values);
+    if (!error) return;
+    if (error.code?.startsWith('22') || /timestamp|date/i.test(error.message || '')) {
+      const vals = { ...values } as Record<string, unknown>;
+      if (vals.date) vals.date = dateOnly;
+      if (vals.created_at) vals.created_at = dateOnly;
+      ({ error } = await supabase.from('sessions').insert(vals));
+      if (!error) return;
+    }
+  }
+  throw new Error('Speichern fehlgeschlagen');
 }
 
 export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise<ScoreEntry[]> {
@@ -154,65 +107,28 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   }
 
   const iso = start.toISOString();
-  let { data, error } = await supabase
-    .from('sessions')
-    .select('email, username, count, date')
-    .gte('date', iso);
-  if (error) {
-    const msg = error.message || '';
-    const code = error.code;
-    if (msg.includes('email') || code === '42703') {
-      let fb = await supabase
-        .from('sessions')
-        .select('user_id, username, count, created_at')
-        .gte('created_at', iso);
-      if (fb.error && fb.error.code === '42703') {
-        fb = await supabase
-          .from('sessions')
-          .select('user_id, count, created_at')
-          .gte('created_at', iso);
-        data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
-      } else {
-        data = fb.data?.map(r => ({ email: r.user_id, username: r.username, count: r.count, date: r.created_at }));
-      }
-      error = fb.error;
-    } else if (msg.includes('username')) {
-      const fallback = await supabase
-        .from('sessions')
-        .select('email, count, date')
-        .gte('date', iso);
-      data = fallback.data;
-      error = fallback.error;
-    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-      const fallback = await supabase
-        .from('sessions')
-        .select('email, username, count, date')
-        .gte('date', iso.split('T')[0]);
-      if (fallback.error) {
-        const fb2 = await supabase
-          .from('sessions')
-          .select('email, count, date')
-          .gte('date', iso.split('T')[0]);
-        data = fb2.data;
-        error = fb2.error;
-      } else {
-        data = fallback.data;
-        error = null;
-      }
+  const dateOnly = iso.split('T')[0];
+
+  const attempts = [
+    { sel: 'email, username, count, date', col: 'date', map: (r: any) => ({ name: r.username || r.email, count: r.count }) },
+    { sel: 'email, count, date', col: 'date', map: (r: any) => ({ name: r.email, count: r.count }) },
+    { sel: 'user_id, username, count, created_at', col: 'created_at', map: (r: any) => ({ name: r.username || r.user_id, count: r.count }) },
+    { sel: 'user_id, count, created_at', col: 'created_at', map: (r: any) => ({ name: r.user_id, count: r.count }) },
+  ];
+
+  for (const a of attempts) {
+    let { data, error } = await supabase.from('sessions').select(a.sel).gte(a.col, iso);
+    if (error && (error.code?.startsWith('22') || /timestamp|date/i.test(error.message || ''))) {
+      ({ data, error } = await supabase.from('sessions').select(a.sel).gte(a.col, dateOnly));
+    }
+    if (!error) {
+      const totals: Record<string, number> = {};
+      (data || []).forEach(r => { totals[a.map(r).name] = (totals[a.map(r).name] || 0) + a.map(r).count; });
+      return Object.entries(totals).map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count).slice(0, 10);
     }
   }
-  if (error) throw new Error('Fehler beim Laden der Highscores');
 
-  const totals: Record<string, number> = {};
-  (data || []).forEach(r => {
-    const name = (r.username as string) || (r.email as string);
-    totals[name] = (totals[name] || 0) + (r.count as number);
-  });
-
-  return Object.entries(totals)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+  throw new Error('Fehler beim Laden der Highscores');
 }
 
 export function computeHighscores(period: 'day' | 'week' | 'month'): ScoreEntry[] {
