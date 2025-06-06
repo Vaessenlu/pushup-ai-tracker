@@ -13,9 +13,11 @@ interface CommunityProps {
 }
 
 export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth }) => {
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regUsername, setRegUsername] = useState('');
   const [token, setToken] = useState<string | null>(propToken);
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
@@ -27,83 +29,10 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   }, [propToken]);
 
   useEffect(() => {
-    if (token) {
-      fetchHighscores('day').then(setDaily);
-      fetchHighscores('week').then(setWeekly);
-      fetchHighscores('month').then(setMonthly);
-    }
+    fetchHighscores('day').then(setDaily);
+    fetchHighscores('week').then(setWeekly);
+    fetchHighscores('month').then(setMonthly);
   }, [token]);
-
-  if (!token) {
-    return (
-      <Card className="p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">Community Login</h3>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Input
-            value={regEmail}
-            onChange={(e) => setRegEmail(e.target.value)}
-            placeholder="E-Mail"
-          />
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Benutzername"
-          />
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Passwort"
-          />
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-2">
-            <Button
-              onClick={async () => {
-                if (regEmail && password && username) {
-                  try {
-                    const t = await register(regEmail, password, username);
-                    setToken(t);
-                    onAuth(regEmail, t, username);
-                    setError(null);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                } else {
-                  setError('Bitte E-Mail, Passwort und Benutzernamen eingeben');
-                }
-              }}
-            >
-              Registrieren
-            </Button>
-            <Button
-              onClick={async () => {
-                if (regEmail && password) {
-                  try {
-                    const t = await login(regEmail, password);
-                    const { data } = await supabase.auth.getUser();
-                    const uname =
-                      (data.user?.user_metadata as { username?: string })?.username || '';
-                    setToken(t);
-                    onAuth(regEmail, t, uname);
-                    setError(null);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                } else {
-                  setError('Bitte E-Mail und Passwort eingeben');
-                }
-              }}
-            >
-              Login
-            </Button>
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   const renderTable = (title: string, scores: ScoreEntry[]) => (
     <Card className="p-6">
@@ -130,6 +59,89 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
       {renderTable('Tages-Highscore', daily)}
       {renderTable('Wochen-Highscore', weekly)}
       {renderTable('Monats-Highscore', monthly)}
+      {!token && (
+        <Card className="p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            <h3 className="text-lg font-semibold">Community Login</h3>
+          </div>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <h4 className="font-medium">Login</h4>
+              <Input
+                value={loginEmail}
+                onChange={e => setLoginEmail(e.target.value)}
+                placeholder="E-Mail"
+              />
+              <Input
+                type="password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                placeholder="Passwort"
+              />
+              <Button
+                onClick={async () => {
+                  if (loginEmail && loginPassword) {
+                    try {
+                      const t = await login(loginEmail, loginPassword);
+                      const { data } = await supabase.auth.getUser();
+                      const uname =
+                        (data.user?.user_metadata as { username?: string })?.username || '';
+                      setToken(t);
+                      onAuth(loginEmail, t, uname);
+                      setError(null);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  } else {
+                    setError('Bitte E-Mail und Passwort eingeben');
+                  }
+                }}
+              >
+                Login
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <h4 className="font-medium">Registrieren</h4>
+              <Input
+                value={regUsername}
+                onChange={e => setRegUsername(e.target.value)}
+                placeholder="Benutzername"
+              />
+              <Input
+                value={regEmail}
+                onChange={e => setRegEmail(e.target.value)}
+                placeholder="E-Mail"
+              />
+              <Input
+                type="password"
+                value={regPassword}
+                onChange={e => setRegPassword(e.target.value)}
+                placeholder="Passwort"
+              />
+              <Button
+                onClick={async () => {
+                  if (regEmail && regPassword && regUsername) {
+                    try {
+                      const t = await register(regEmail, regPassword, regUsername);
+                      setToken(t);
+                      onAuth(regEmail, t, regUsername);
+                      setError(null);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  } else {
+                    setError('Bitte alle Felder ausfüllen');
+                  }
+                }}
+              >
+                Registrieren
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };
