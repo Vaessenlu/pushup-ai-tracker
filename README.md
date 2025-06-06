@@ -87,7 +87,10 @@ auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
 
 
 Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
-und Highscore-Abfragen verwendet.
+und Highscore-Abfragen verwendet. Melde dich im "Community"-Tab an, damit deine
+Sessions gespeichert werden und du die Highscores sehen kannst. Stelle sicher,
+dass die Tabelle `sessions` öffentlich lesbar ist oder passende
+Row-Level-Security-Regeln eingerichtet sind.
 
 
 ### 4. Deployment
