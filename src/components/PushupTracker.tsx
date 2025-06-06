@@ -76,7 +76,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [count, setCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
-  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [hideUnimportant, setHideUnimportant] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
@@ -393,7 +393,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       <div className="space-y-6">
         {/* Camera Section */}
         <div className="relative">
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
+          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative max-w-xl mx-auto max-h-[50vh]">
             {cameraEnabled ? (
               <>
                 <video
