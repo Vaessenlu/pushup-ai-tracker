@@ -18,6 +18,7 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
   const [monthly, setMonthly] = useState<ScoreEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setToken(propToken);
@@ -50,13 +51,19 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Passwort"
           />
+          {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex gap-2">
             <Button
               onClick={async () => {
                 if (regEmail && password) {
-                  const t = await register(regEmail, password);
-                  setToken(t);
-                  onAuth(regEmail, t);
+                  try {
+                    const t = await register(regEmail, password);
+                    setToken(t);
+                    onAuth(regEmail, t);
+                    setError(null);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
                 }
               }}
             >
@@ -65,9 +72,14 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
             <Button
               onClick={async () => {
                 if (regEmail && password) {
-                  const t = await login(regEmail, password);
-                  setToken(t);
-                  onAuth(regEmail, t);
+                  try {
+                    const t = await login(regEmail, password);
+                    setToken(t);
+                    onAuth(regEmail, t);
+                    setError(null);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
                 }
               }}
             >
