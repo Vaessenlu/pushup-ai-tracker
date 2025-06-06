@@ -77,7 +77,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
   const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
-  const [cameraZoomRange, setCameraZoomRange] = useState({ min: 1, max: 1 });
+  const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
   const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [hideUnimportant, setHideUnimportant] = useState(false);
@@ -184,8 +184,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       if (caps && 'zoom' in caps) {
         setCameraZoomSupported(true);
         const settings = track.getSettings();
-        setCameraZoomRange({ min: caps.zoom!.min!, max: caps.zoom!.max! });
-        const initialZoom = typeof settings.zoom === 'number' ? settings.zoom : caps.zoom!.min!;
+        const minZoom = Math.min(0.5, caps.zoom!.min!);
+        setCameraZoomRange({ min: minZoom, max: caps.zoom!.max! });
+        const initialZoom = typeof settings.zoom === 'number' ? settings.zoom : minZoom;
         setCameraZoom([initialZoom]);
         try {
           await track.applyConstraints({ advanced: [{ zoom: initialZoom }] });
@@ -225,7 +226,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setVideoReady(false);
     setCameraZoomSupported(false);
     setCameraZoom([1]);
-    setCameraZoomRange({ min: 1, max: 1 });
+    setCameraZoomRange({ min: 0.5, max: 1 });
     setIsTracking(false);
     setStatus('ready');
   }, [setIsTracking]);
