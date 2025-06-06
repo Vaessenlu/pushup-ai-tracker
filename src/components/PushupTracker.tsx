@@ -270,22 +270,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   // Animation loop for pose detection
   useEffect(() => {
-    if ((isTracking || showSkeleton) && videoRef.current && videoReady && videoDimensions.width > 0) {
+    if (cameraEnabled && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
         if (videoRef.current && detectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
           if (isTracking) {
             setCount(newCount);
 
-            // Update session time
+            // Update session time only while tracking
             const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
             setSessionTime(currentTime);
           }
+
+          // Update pose results for skeleton drawing and model status
+          setPoseResults(detectorRef.current.getLandmarks());
+          setModelReady(detectorRef.current.isReady());
         }
 
-        if (isTracking || showSkeleton) {
-          animationRef.current = requestAnimationFrame(animate);
-        }
+        animationRef.current = requestAnimationFrame(animate);
       };
 
       console.log('Starting pose detection animation loop');
@@ -297,14 +299,22 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isTracking, showSkeleton, videoReady, videoDimensions]);
+  }, [cameraEnabled, isTracking, videoReady, videoDimensions]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
+    if (!showSkeleton) {
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+      return;
+    }
+
     let frameId: number;
     const draw = () => {
       const pose = detectorRef.current?.getLandmarks();
-      if (showSkeleton && pose && canvasRef.current && videoDimensions.width > 0) {
+      if (pose && canvasRef.current && videoDimensions.width > 0) {
         const ctx = canvasRef.current.getContext('2d');
         if (!ctx) return;
 
