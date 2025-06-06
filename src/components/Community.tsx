@@ -3,17 +3,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchHighscores, register, login, ScoreEntry } from '@/lib/community';
+import { supabase } from '@/lib/supabaseClient';
 import { Users } from 'lucide-react';
 
 interface CommunityProps {
   email: string | null;
   token: string | null;
-  onAuth: (email: string, token: string) => void;
+  onAuth: (email: string, token: string, username: string) => void;
 }
 
 export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth }) => {
   const [regEmail, setRegEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [token, setToken] = useState<string | null>(propToken);
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
@@ -46,6 +48,11 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
             placeholder="E-Mail"
           />
           <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Benutzername"
+          />
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -55,15 +62,17 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
           <div className="flex gap-2">
             <Button
               onClick={async () => {
-                if (regEmail && password) {
+                if (regEmail && password && username) {
                   try {
-                    const t = await register(regEmail, password);
+                    const t = await register(regEmail, password, username);
                     setToken(t);
-                    onAuth(regEmail, t);
+                    onAuth(regEmail, t, username);
                     setError(null);
                   } catch (e) {
                     setError((e as Error).message);
                   }
+                } else {
+                  setError('Bitte E-Mail, Passwort und Benutzernamen eingeben');
                 }
               }}
             >
@@ -74,12 +83,17 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
                 if (regEmail && password) {
                   try {
                     const t = await login(regEmail, password);
+                    const { data } = await supabase.auth.getUser();
+                    const uname =
+                      (data.user?.user_metadata as { username?: string })?.username || '';
                     setToken(t);
-                    onAuth(regEmail, t);
+                    onAuth(regEmail, t, uname);
                     setError(null);
                   } catch (e) {
                     setError((e as Error).message);
                   }
+                } else {
+                  setError('Bitte E-Mail und Passwort eingeben');
                 }
               }}
             >
@@ -99,9 +113,9 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
       ) : (
         <div className="space-y-1">
           {scores.map((s, i) => (
-            <div key={s.email} className="flex justify-between">
+            <div key={s.name} className="flex justify-between">
               <span>
-                {i + 1}. {s.email}
+                {i + 1}. {s.name}
               </span>
               <span>{s.count}</span>
             </div>

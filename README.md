@@ -62,9 +62,19 @@ small. Connection pairs are defined locally in
 ### Nutzung von Supabase
 
 Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
-einfach eine Tabelle `sessions` mit den Spalten `email`, `date` und `count` in
-Ihrem Supabase-Projekt an. Hinterlegen Sie anschließend Ihre Supabase URL und
-den Anon Key in einer Datei `.env` im Projektwurzelverzeichnis:
+eine Tabelle `sessions` an. Diese sollte die Spalten `email`, `username`, `date`
+und `count` (integer) enthalten. Für `date` empfiehlt sich der Typ `timestamp with time zone`.
+Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
+verwendet die App automatisch einen Fallback. Nutzt Ihre bestehende Tabelle
+statt `email` eine Spalte `user_id` und `created_at`, erkennt die App dies und
+fällt ebenfalls darauf zurück. Befindet sich zusätzlich eine Spalte `username`
+in dieser Variante, wird auch dort der Benutzername gespeichert und in den
+Highscores angezeigt. Ein Fehler "400 Bad Request" weist oft auf eine
+abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
+Spaltennamen und -typen der Tabelle `sessions`.
+
+Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
+`.env` im Projektwurzelverzeichnis:
 
 ```
 VITE_SUPABASE_URL=<your-url>
@@ -75,12 +85,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
 
+Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
+
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
 
 
 Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
-und Highscore-Abfragen verwendet.
+und Highscore-Abfragen verwendet. Melde dich im "Community"-Tab an, damit deine
+Sessions gespeichert werden und du die Highscores sehen kannst. Stelle sicher,
+dass die Tabelle `sessions` öffentlich lesbar ist oder passende
+Row-Level-Security-Regeln eingerichtet sind.
 
 
 ### 4. Deployment
