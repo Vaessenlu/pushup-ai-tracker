@@ -67,7 +67,9 @@ und `count` (integer) enthalten. Für `date` empfiehlt sich der Typ `timestamp w
 Fehlt die Spalte `username` oder ist `date` lediglich ein `date`‑Feld,
 verwendet die App automatisch einen Fallback. Nutzt Ihre bestehende Tabelle
 statt `email` eine Spalte `user_id` und `created_at`, erkennt die App dies und
-fällt ebenfalls darauf zurück. Ein Fehler "400 Bad Request" weist oft auf eine
+fällt ebenfalls darauf zurück. Befindet sich zusätzlich eine Spalte `username`
+in dieser Variante, wird auch dort der Benutzername gespeichert und in den
+Highscores angezeigt. Ein Fehler "400 Bad Request" weist oft auf eine
 abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
 Spaltennamen und -typen der Tabelle `sessions`.
 

@@ -82,9 +82,20 @@ export async function saveSessionServer(
           count: session.count,
         });
       } else if (msg.includes('email') || code === '42703') {
-        await supabase
-          .from('sessions')
-          .insert({ user_id: userId, created_at: session.date, count: session.count });
+        try {
+          await supabase
+            .from('sessions')
+            .insert({ user_id: userId, username, created_at: session.date, count: session.count });
+        } catch (e2) {
+          const msg2 = (e2 as { message?: string }).message || '';
+          if (msg2.includes('username')) {
+            await supabase
+              .from('sessions')
+              .insert({ user_id: userId, created_at: session.date, count: session.count });
+          } else {
+            throw e2;
+          }
+        }
       } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
         const onlyDate = session.date.split('T')[0];
         try {
@@ -104,9 +115,20 @@ export async function saveSessionServer(
               count: session.count,
             });
           } else if (msg2.includes('email') || code2 === '42703') {
-            await supabase
-              .from('sessions')
-              .insert({ user_id: userId, created_at: onlyDate, count: session.count });
+            try {
+              await supabase
+                .from('sessions')
+                .insert({ user_id: userId, username, created_at: onlyDate, count: session.count });
+            } catch (e3) {
+              const msg3 = (e3 as { message?: string }).message || '';
+              if (msg3.includes('username')) {
+                await supabase
+                  .from('sessions')
+                  .insert({ user_id: userId, created_at: onlyDate, count: session.count });
+              } else {
+                throw e3;
+              }
+            }
           } else {
             throw e2;
           }
@@ -140,11 +162,19 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
     const msg = error.message || '';
     const code = error.code;
     if (msg.includes('email') || code === '42703') {
-      const fb = await supabase
+      let fb = await supabase
         .from('sessions')
-        .select('user_id, count, created_at')
+        .select('user_id, username, count, created_at')
         .gte('created_at', iso);
-      data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
+      if (fb.error && fb.error.code === '42703') {
+        fb = await supabase
+          .from('sessions')
+          .select('user_id, count, created_at')
+          .gte('created_at', iso);
+        data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
+      } else {
+        data = fb.data?.map(r => ({ email: r.user_id, username: r.username, count: r.count, date: r.created_at }));
+      }
       error = fb.error;
     } else if (msg.includes('username')) {
       const fallback = await supabase
