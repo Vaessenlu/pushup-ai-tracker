@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchHighscores, register, login, ScoreEntry } from '@/lib/community';
+import {
+  fetchHighscores,
+  register,
+  login,
+  ScoreEntry,
+  HighscoreResult,
+} from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
 import { Users } from 'lucide-react';
 
@@ -22,6 +28,9 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
   const [monthly, setMonthly] = useState<ScoreEntry[]>([]);
+  const [dailyTotal, setDailyTotal] = useState(0);
+  const [weeklyTotal, setWeeklyTotal] = useState(0);
+  const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,36 +38,48 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   }, [propToken]);
 
   useEffect(() => {
-    fetchHighscores('day').then(setDaily);
-    fetchHighscores('week').then(setWeekly);
-    fetchHighscores('month').then(setMonthly);
+    fetchHighscores('day').then((res) => {
+      setDaily(res.scores);
+      setDailyTotal(res.total);
+    });
+    fetchHighscores('week').then((res) => {
+      setWeekly(res.scores);
+      setWeeklyTotal(res.total);
+    });
+    fetchHighscores('month').then((res) => {
+      setMonthly(res.scores);
+      setMonthlyTotal(res.total);
+    });
   }, [token]);
 
-  const renderTable = (title: string, scores: ScoreEntry[]) => (
+  const renderTable = (title: string, scores: ScoreEntry[], total: number) => (
     <Card className="p-6">
       <h3 className="text-lg font-semibold mb-4">{title}</h3>
       {scores.length === 0 ? (
         <p className="text-gray-500">Noch keine Daten</p>
       ) : (
-        <div className="space-y-1">
-          {scores.map((s, i) => (
-            <div key={s.name} className="flex justify-between">
-              <span>
-                {i + 1}. {s.name}
-              </span>
-              <span>{s.count}</span>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="space-y-1 mb-2">
+            {scores.map((s, i) => (
+              <div key={s.name} className="flex justify-between">
+                <span>
+                  {i + 1}. {s.name}
+                </span>
+                <span>{s.count}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-right font-semibold">Summe: {total}</div>
+        </>
       )}
     </Card>
   );
 
   return (
     <div className="space-y-4">
-      {renderTable('Tages-Highscore', daily)}
-      {renderTable('Wochen-Highscore', weekly)}
-      {renderTable('Monats-Highscore', monthly)}
+      {renderTable('Tages-Highscore', daily, dailyTotal)}
+      {renderTable('Wochen-Highscore', weekly, weeklyTotal)}
+      {renderTable('Monats-Highscore', monthly, monthlyTotal)}
       {!token && (
         <Card className="p-6 space-y-4">
           <div className="flex items-center gap-2">
