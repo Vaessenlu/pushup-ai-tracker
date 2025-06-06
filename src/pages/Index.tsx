@@ -7,7 +7,7 @@ import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
-import { saveCommunitySession } from '@/lib/community';
+import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 
 export interface Session {
   id: string;
@@ -21,15 +21,20 @@ const Index = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
+  const [communityToken, setCommunityToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('communityEmail');
-    if (stored) setCommunityEmail(stored);
+    const storedEmail = localStorage.getItem('communityEmail');
+    const storedToken = localStorage.getItem('communityToken');
+    if (storedEmail) setCommunityEmail(storedEmail);
+    if (storedToken) setCommunityToken(storedToken);
   }, []);
 
-  const handleRegister = (email: string) => {
+  const handleRegister = (email: string, token: string) => {
     setCommunityEmail(email);
+    setCommunityToken(token);
     localStorage.setItem('communityEmail', email);
+    localStorage.setItem('communityToken', token);
   };
 
   const handleSessionComplete = (session: Omit<Session, 'id'>) => {
@@ -38,7 +43,12 @@ const Index = () => {
       id: Date.now().toString(),
     };
     setSessions(prev => [newSession, ...prev]);
-    if (communityEmail) {
+    if (communityToken) {
+      saveSessionServer(communityToken, {
+        date: new Date().toISOString(),
+        count: newSession.count,
+      });
+    } else if (communityEmail) {
       saveCommunitySession({
         email: communityEmail,
         date: new Date().toISOString(),
@@ -150,7 +160,7 @@ const Index = () => {
             <SessionHistory sessions={sessions} />
           </TabsContent>
           <TabsContent value="community">
-            <Community email={communityEmail} onRegister={handleRegister} />
+            <Community email={communityEmail} token={communityToken} onAuth={handleRegister} />
           </TabsContent>
         </Tabs>
       </div>
