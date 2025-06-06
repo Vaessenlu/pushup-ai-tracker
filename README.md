@@ -85,7 +85,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
 
-Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
+Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
+mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
+Du meldest dich danach mit deiner E-Mail-Adresse und deinem Passwort an.
+Jede E-Mail-Adresse ist genau einem Benutzernamen zugeordnet.
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.

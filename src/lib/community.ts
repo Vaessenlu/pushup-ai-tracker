@@ -203,14 +203,17 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   }
   if (error) throw new Error('Fehler beim Laden der Highscores');
 
-  const totals: Record<string, number> = {};
+  const totals = new Map<string, { name: string; count: number }>();
   (data || []).forEach(r => {
-    const name = (r.username as string) || (r.email as string);
-    totals[name] = (totals[name] || 0) + (r.count as number);
+    const rawName = (r.username as string) || (r.email as string);
+    const key = rawName?.trim().toLowerCase();
+    if (!key) return;
+    const existing = totals.get(key);
+    if (existing) existing.count += r.count as number;
+    else totals.set(key, { name: rawName.trim(), count: r.count as number });
   });
 
-  return Object.entries(totals)
-    .map(([name, count]) => ({ name, count }))
+  return Array.from(totals.values())
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 }
@@ -230,17 +233,20 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): ScoreEntry[
     start = new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
-  const totals: Record<string, number> = {};
+  const totals = new Map<string, { name: string; count: number }>();
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
-      const name = s.username || s.email;
-      totals[name] = (totals[name] || 0) + s.count;
+      const rawName = s.username || s.email;
+      const key = rawName?.trim().toLowerCase();
+      if (!key) return;
+      const existing = totals.get(key);
+      if (existing) existing.count += s.count;
+      else totals.set(key, { name: rawName.trim(), count: s.count });
     }
   });
 
-  return Object.entries(totals)
-    .map(([name, count]) => ({ name, count }))
+  return Array.from(totals.values())
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 }
