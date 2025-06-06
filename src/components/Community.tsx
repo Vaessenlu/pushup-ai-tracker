@@ -8,12 +8,13 @@ import { Users } from 'lucide-react';
 interface CommunityProps {
   email: string | null;
   token: string | null;
-  onAuth: (email: string, token: string) => void;
+  onAuth: (email: string, token: string, username?: string) => void;
 }
 
 export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth }) => {
   const [regEmail, setRegEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [token, setToken] = useState<string | null>(propToken);
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
@@ -46,6 +47,11 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
             placeholder="E-Mail"
           />
           <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Benutzername (optional)"
+          />
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -57,9 +63,9 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
               onClick={async () => {
                 if (regEmail && password) {
                   try {
-                    const t = await register(regEmail, password);
+                    const t = await register(regEmail, password, username);
                     setToken(t);
-                    onAuth(regEmail, t);
+                    onAuth(regEmail, t, username);
                     setError(null);
                   } catch (e) {
                     setError((e as Error).message);
@@ -75,7 +81,7 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
                   try {
                     const t = await login(regEmail, password);
                     setToken(t);
-                    onAuth(regEmail, t);
+                    onAuth(regEmail, t, username);
                     setError(null);
                   } catch (e) {
                     setError((e as Error).message);
@@ -99,9 +105,9 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
       ) : (
         <div className="space-y-1">
           {scores.map((s, i) => (
-            <div key={s.email} className="flex justify-between">
+            <div key={s.name} className="flex justify-between">
               <span>
-                {i + 1}. {s.email}
+                {i + 1}. {s.name}
               </span>
               <span>{s.count}</span>
             </div>

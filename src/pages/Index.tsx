@@ -30,12 +30,15 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
   const [communityToken, setCommunityToken] = useState<string | null>(null);
+  const [communityUsername, setCommunityUsername] = useState<string | null>(null);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('communityEmail');
     const storedToken = localStorage.getItem('communityToken');
+    const storedUsername = localStorage.getItem('communityUsername');
     if (storedEmail) setCommunityEmail(storedEmail);
     if (storedToken) setCommunityToken(storedToken);
+    if (storedUsername) setCommunityUsername(storedUsername);
   }, []);
 
   useEffect(() => {
@@ -67,9 +70,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     load();
   }, [user?.id]);
 
-  const handleRegister = (email: string, token: string) => {
+  const handleRegister = (email: string, token: string, username?: string) => {
     setCommunityEmail(email);
     setCommunityToken(token);
+    if (username) {
+      setCommunityUsername(username);
+      localStorage.setItem('communityUsername', username);
+    }
     localStorage.setItem('communityEmail', email);
     localStorage.setItem('communityToken', token);
   };
@@ -102,6 +109,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     } else if (communityEmail) {
       saveCommunitySession({
         email: communityEmail,
+        username: communityUsername || undefined,
         date: new Date().toISOString(),
         count: newSession.count,
       });

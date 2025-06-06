@@ -62,7 +62,7 @@ small. Connection pairs are defined locally in
 ### Nutzung von Supabase
 
 Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
-einfach eine Tabelle `sessions` mit den Spalten `email`, `date` und `count` in
+einfach eine Tabelle `sessions` mit den Spalten `email`, `username`, `date` und `count` in
 Ihrem Supabase-Projekt an. Hinterlegen Sie anschließend Ihre Supabase URL und
 den Anon Key in einer Datei `.env` im Projektwurzelverzeichnis:
 
@@ -74,6 +74,8 @@ NEXT_PUBLIC_SUPABASE_URL=<your-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
+
+Bei der Registrierung kannst du optional einen Benutzernamen angeben. Dieser wird zusammen mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
