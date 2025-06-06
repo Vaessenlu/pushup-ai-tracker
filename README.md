@@ -126,6 +126,21 @@ Passen Sie die Funktionen zum Speichern der Community‑Sessions so an, dass sie
 einen `fetch`‑Aufruf an Ihren Server senden, statt in `localStorage`
 zu schreiben.
 
+### Nutzung von Supabase
+
+Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
+einfach eine Tabelle `sessions` mit den Spalten `email`, `date` und `count` in
+Ihrem Supabase-Projekt an. Hinterlegen Sie anschließend Ihre Supabase URL und
+den Anon Key in einer Datei `.env` im Projektwurzelverzeichnis:
+
+```
+VITE_SUPABASE_URL=<your-url>
+VITE_SUPABASE_ANON_KEY=<your-key>
+```
+
+Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
+und Highscore-Abfragen verwendet.
+
 ### 4. Deployment
 
 Kopieren Sie den Inhalt des `dist`‑Ordners und den `server`‑Ordner auf Ihren

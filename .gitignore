@@ -28,4 +28,5 @@ requirements.txt
 
 # Database
 server/db.sqlite
+.env
 
