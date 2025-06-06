@@ -140,6 +140,7 @@ VITE_SUPABASE_ANON_KEY=<your-key>
 NEXT_PUBLIC_SUPABASE_URL=<your-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
+Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
