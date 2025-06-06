@@ -149,6 +149,10 @@ Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
 und Highscore-Abfragen verwendet. Für das neue Forumsmodul benötigen Sie
 zusätzlich eine Tabelle `posts` mit den Spalten `id`, `email`, `content` und
 `created_at`.
+### Forum-Modul
+
+Eingeloggte Nutzer können im Forum Beiträge verfassen. Die Daten werden in der `posts`-Tabelle gespeichert. Stelle sicher, dass RLS deaktiviert ist oder geeignete Policies existieren, damit alle angemeldeten Benutzer Beiträge lesen und schreiben können.
+
 
 ### 4. Deployment
 
