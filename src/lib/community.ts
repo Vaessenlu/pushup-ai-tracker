@@ -73,6 +73,19 @@ export async function saveSessionServer(
     username,
     date: session.date,
     count: session.count,
+  }).catch(async err => {
+    if (
+      (err as { message?: string }).message?.includes('username') ||
+      (err as { code?: string }).code === '42703'
+    ) {
+      await supabase.from('sessions').insert({
+        email,
+        date: session.date,
+        count: session.count,
+      });
+    } else {
+      throw err;
+    }
   });
 }
 
@@ -90,10 +103,18 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
     start = new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('sessions')
     .select('email, username, count, date')
     .gte('date', start.toISOString());
+  if (error && (error.code === '42703' || error.message?.includes('username'))) {
+    const fallback = await supabase
+      .from('sessions')
+      .select('email, count, date')
+      .gte('date', start.toISOString());
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw new Error('Fehler beim Laden der Highscores');
 
   const totals: Record<string, number> = {};

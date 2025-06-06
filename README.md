@@ -62,8 +62,8 @@ small. Connection pairs are defined locally in
 ### Nutzung von Supabase
 
 Alternativ können Sie die mitgelieferte Supabase‑Integration verwenden. Legen
-einfach eine Tabelle `sessions` mit den Spalten `email`, `username`, `date` und `count` in
-Ihrem Supabase-Projekt an. Hinterlegen Sie anschließend Ihre Supabase URL und
+einfach eine Tabelle `sessions` mit den Spalten `email`, `username`, `date` und `count` an.
+Fehlt die Spalte `username`, wird nur die E‑Mail angezeigt. Hinterlegen Sie anschließend Ihre Supabase URL und
 den Anon Key in einer Datei `.env` im Projektwurzelverzeichnis:
 
 ```
