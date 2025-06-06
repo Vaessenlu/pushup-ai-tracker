@@ -20,8 +20,19 @@ import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
 import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
-import drawingUtils from '@mediapipe/drawing_utils/drawing_utils.js';
-const { drawConnectors, drawLandmarks } = drawingUtils;
+let drawConnectors: typeof import('@mediapipe/drawing_utils').drawConnectors | undefined;
+let drawLandmarks: typeof import('@mediapipe/drawing_utils').drawLandmarks | undefined;
+
+// Load drawing utils dynamically to avoid tree-shaking issues
+import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: any) => {
+  const utils =
+    mod.drawingUtils ??
+    mod.default ??
+    (globalThis as any).drawingUtils ??
+    mod;
+  drawConnectors = utils.drawConnectors;
+  drawLandmarks = utils.drawLandmarks;
+});
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
 import {
   PushupDetector,
@@ -296,8 +307,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           ? pose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
           : pose;
 
-        drawConnectors(ctx, pose, connections, { color: '#00FF00', lineWidth: 3 });
-        drawLandmarks(ctx, landmarksToDraw, { color: '#FF0000', lineWidth: 2 });
+        if (drawConnectors && drawLandmarks) {
+          drawConnectors(ctx, pose, connections, {
+            color: '#00FF00',
+            lineWidth: 3,
+          });
+          drawLandmarks(ctx, landmarksToDraw, {
+            color: '#FF0000',
+            lineWidth: 2,
+          });
+        }
 
         pose.forEach((lm, idx) => {
           if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
@@ -308,8 +327,14 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
         });
 
-        [11, 12].forEach(i => drawLandmarks(ctx, [pose[i]], { color: '#FF00FF', radius: 6 }));
-        [23, 24].forEach(i => drawLandmarks(ctx, [pose[i]], { color: '#00FFFF', radius: 6 }));
+        if (drawLandmarks) {
+          [11, 12].forEach((i) =>
+            drawLandmarks!(ctx, [pose[i]], { color: '#FF00FF', radius: 6 })
+          );
+          [23, 24].forEach((i) =>
+            drawLandmarks!(ctx, [pose[i]], { color: '#00FFFF', radius: 6 })
+          );
+        }
 
         const avgConfidence = pose.reduce((sum, kp) => sum + (kp.visibility ?? 0.5), 0) / pose.length;
 
