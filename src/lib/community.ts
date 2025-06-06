@@ -80,7 +80,7 @@ export async function saveSessionServer(
           date: session.date,
           count: session.count,
         });
-      } else if (msg.includes('type date') || code === '22007') {
+      } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
         const onlyDate = session.date.split('T')[0];
         try {
           await supabase.from('sessions').insert({
@@ -137,7 +137,7 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
         .gte('date', iso);
       data = fallback.data;
       error = fallback.error;
-    } else if (msg.includes('type date') || code === '22007') {
+    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
       const onlyDate = iso.split('T')[0];
       let res = await supabase
         .from('sessions')
