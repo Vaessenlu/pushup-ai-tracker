@@ -63,15 +63,16 @@ export async function login(email: string, password: string): Promise<string> {
 export async function saveSessionServer(
   token: string,
   session: Omit<CommunitySession, 'email' | 'username'>,
+  providedUsername?: string,
 ) {
-  // ensure current session
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
 
   const { data: userData } = await supabase.auth.getUser();
   const email = userData.user?.email;
   const userId = userData.user?.id;
-  const username = (userData.user?.user_metadata as { username?: string })?.username;
+  const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
+  const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
   await supabase
@@ -176,9 +177,9 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
           .from('sessions')
           .select('user_id, count, created_at')
           .gte('created_at', iso);
-        data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
+        data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
       } else {
-        data = fb.data?.map(r => ({ email: r.user_id, username: r.username, count: r.count, date: r.created_at }));
+        data = fb.data?.map(r => ({ user_id: r.user_id, username: r.username, count: r.count, date: r.created_at }));
       }
       error = fb.error;
     } else if (msg.includes('username')) {
@@ -209,16 +210,23 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   if (error) throw new Error('Fehler beim Laden der Highscores');
 
   const totals = new Map<string, { name: string; count: number }>();
+  const idToName = new Map<string, string>();
   let totalCount = 0;
   (data || []).forEach(r => {
+    const id = (r as Record<string, unknown>).user_id as string | undefined;
     let name: string | undefined =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
         : undefined;
     if (!name) {
       const emailVal = (r.email as string) || '';
-      if (emailVal.includes('@')) name = emailVal.trim();
+      if (emailVal.includes('@')) {
+        name = emailVal.trim();
+      }
     }
+    if (name && id) idToName.set(id, name);
+    if (!name && id && idToName.has(id)) name = idToName.get(id);
+    if (!name && id) name = id;
     if (!name) return;
     const key = name.toLowerCase();
     totalCount += r.count as number;
@@ -250,17 +258,22 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreRe
   }
 
   const totals = new Map<string, { name: string; count: number }>();
+  const idToName = new Map<string, string>();
   let totalCount = 0;
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
+      const id = (s as Record<string, unknown>).user_id as string | undefined;
       let name: string | undefined =
         typeof s.username === 'string' && s.username.trim()
           ? s.username.trim()
           : undefined;
-      if (!name && typeof s.email === 'string' && s.email.includes('@')) {
+      if (!name && typeof s.email === 'string' && s.email.trim()) {
         name = s.email.trim();
       }
+      if (name && id) idToName.set(id, name);
+      if (!name && id && idToName.has(id)) name = idToName.get(id);
+      if (!name && id) name = id;
       if (!name) return;
       const key = name.toLowerCase();
       totalCount += s.count;
