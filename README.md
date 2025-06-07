@@ -93,6 +93,8 @@ Die Highscores im "Community"-Tab kannst du auch ohne Login einsehen. Darunter
 findest du zwei getrennte Formulare: eines zum Einloggen (E-Mail und Passwort)
 und eines zur Registrierung (Benutzername, E-Mail und Passwort).
 
+Seit dem neuesten Update werden in den Highscore-Tabellen neben den besten Nutzern auch die insgesamt absolvierten Liegestützen des Tages, der Woche und des Monats angezeigt.
+
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
 
