@@ -63,6 +63,7 @@ export async function login(email: string, password: string): Promise<string> {
 export async function saveSessionServer(
   token: string,
   session: Omit<CommunitySession, 'email' | 'username'>,
+  providedUsername?: string,
 ) {
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
@@ -70,7 +71,8 @@ export async function saveSessionServer(
   const { data: userData } = await supabase.auth.getUser();
   const email = userData.user?.email;
   const userId = userData.user?.id;
-  const username = (userData.user?.user_metadata as { username?: string })?.username;
+  const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
+  const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
   await supabase
@@ -175,9 +177,9 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
           .from('sessions')
           .select('user_id, count, created_at')
           .gte('created_at', iso);
-        data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
+        data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
       } else {
-        data = fb.data?.map(r => ({ email: r.user_id, username: r.username, count: r.count, date: r.created_at }));
+        data = fb.data?.map(r => ({ user_id: r.user_id, username: r.username, count: r.count, date: r.created_at }));
       }
       error = fb.error;
     } else if (msg.includes('username')) {

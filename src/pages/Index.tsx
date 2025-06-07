@@ -101,10 +101,14 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     }
     setSessions(prev => [newSession, ...prev]);
     if (communityToken) {
-      saveSessionServer(communityToken, {
-        date: new Date().toISOString(),
-        count: newSession.count,
-      });
+      saveSessionServer(
+        communityToken,
+        {
+          date: new Date().toISOString(),
+          count: newSession.count,
+        },
+        communityUsername || undefined,
+      );
     } else if (communityEmail) {
       saveCommunitySession({
         email: communityEmail,
