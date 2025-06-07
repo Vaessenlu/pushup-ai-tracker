@@ -76,6 +76,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [count, setCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
+  const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
+  const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
+  const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [hideUnimportant, setHideUnimportant] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
@@ -150,21 +153,50 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
   }, [cameraEnabled, handleVideoLoadedMetadata]);
 
+  // Apply hardware camera zoom when changed
+  useEffect(() => {
+    if (!cameraZoomSupported) return;
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      track
+        .applyConstraints({ advanced: [{ zoom: cameraZoom[0] }] })
+        .catch((err) => console.error('Applying camera zoom failed', err));
+    }
+  }, [cameraZoom, cameraZoomSupported]);
+
   const enableCamera = useCallback(async () => {
     try {
       console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+        video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
         }
       });
-      
+
       console.log('Camera stream obtained successfully');
       streamRef.current = stream;
       setCameraEnabled(true);
-      
+
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities ? (track.getCapabilities() as MediaTrackCapabilities) : undefined;
+      if (caps && 'zoom' in caps) {
+        setCameraZoomSupported(true);
+        const settings = track.getSettings();
+        const minZoom = Math.min(0.5, caps.zoom!.min!);
+        setCameraZoomRange({ min: minZoom, max: caps.zoom!.max! });
+        const initialZoom = typeof settings.zoom === 'number' ? settings.zoom : minZoom;
+        setCameraZoom([initialZoom]);
+        try {
+          await track.applyConstraints({ advanced: [{ zoom: initialZoom }] });
+        } catch (err) {
+          console.error('Failed to apply initial zoom', err);
+        }
+      } else {
+        setCameraZoomSupported(false);
+      }
+
     } catch (error) {
       console.error('Camera access error:', error);
       setCameraEnabled(false);
@@ -192,6 +224,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
     setCameraEnabled(false);
     setVideoReady(false);
+    setCameraZoomSupported(false);
+    setCameraZoom([1]);
+    setCameraZoomRange({ min: 0.5, max: 1 });
     setIsTracking(false);
     setStatus('ready');
   }, [setIsTracking]);
@@ -497,6 +532,26 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               </div>
               <ZoomIn className="h-4 w-4 text-gray-600" />
             </div>
+
+            {cameraZoomSupported && (
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <ZoomOut className="h-4 w-4 text-gray-600" />
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Geräte-Zoom: {cameraZoom[0].toFixed(1)}x
+                  </label>
+                  <Slider
+                    value={cameraZoom}
+                    onValueChange={setCameraZoom}
+                    max={cameraZoomRange.max}
+                    min={cameraZoomRange.min}
+                    step={0.1}
+                    className="w-full"
+                  />
+                </div>
+                <ZoomIn className="h-4 w-4 text-gray-600" />
+              </div>
+            )}
 
             {/* Skeleton Toggle */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
