@@ -12,6 +12,11 @@ export interface ScoreEntry {
   count: number;
 }
 
+export interface HighscoreResult {
+  scores: ScoreEntry[];
+  total: number;
+}
+
 export function loadCommunitySessions(): CommunitySession[] {
   if (typeof localStorage === 'undefined') return [];
   try {
@@ -139,7 +144,7 @@ export async function saveSessionServer(
     });
 }
 
-export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise<ScoreEntry[]> {
+export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
   if (period === 'day') {
@@ -204,21 +209,37 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   if (error) throw new Error('Fehler beim Laden der Highscores');
 
   const totals = new Map<string, { name: string; count: number }>();
+  let totalCount = 0;
   (data || []).forEach(r => {
-    const rawName = (r.username as string) || (r.email as string);
-    const key = rawName?.trim().toLowerCase();
-    if (!key) return;
+    let name: string | undefined =
+      typeof r.username === 'string' && r.username.trim()
+        ? r.username.trim()
+        : undefined;
+    if (!name) {
+      const emailVal = (r.email as string) || '';
+      if (emailVal.includes('@')) {
+        name = emailVal.trim();
+      }
+    }
+    if (!name && typeof (r as Record<string, unknown>).user_id === 'string') {
+      name = (r as Record<string, unknown>).user_id as string;
+    }
+    if (!name) return;
+    const key = name.toLowerCase();
+    totalCount += r.count as number;
     const existing = totals.get(key);
     if (existing) existing.count += r.count as number;
-    else totals.set(key, { name: rawName.trim(), count: r.count as number });
+    else totals.set(key, { name, count: r.count as number });
   });
 
-  return Array.from(totals.values())
+  const scores = Array.from(totals.values())
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
+
+  return { scores, total: totalCount };
 }
 
-export function computeHighscores(period: 'day' | 'week' | 'month'): ScoreEntry[] {
+export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreResult {
   const sessions = loadCommunitySessions();
   const now = new Date();
   let start: Date;
@@ -234,19 +255,32 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): ScoreEntry[
   }
 
   const totals = new Map<string, { name: string; count: number }>();
+  let totalCount = 0;
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
-      const rawName = s.username || s.email;
-      const key = rawName?.trim().toLowerCase();
-      if (!key) return;
+      let name: string | undefined =
+        typeof s.username === 'string' && s.username.trim()
+          ? s.username.trim()
+          : undefined;
+      if (!name && typeof s.email === 'string' && s.email.trim()) {
+        name = s.email.trim();
+      }
+      if (!name && (s as Record<string, unknown>).user_id) {
+        name = String((s as Record<string, unknown>).user_id);
+      }
+      if (!name) return;
+      const key = name.toLowerCase();
+      totalCount += s.count;
       const existing = totals.get(key);
       if (existing) existing.count += s.count;
-      else totals.set(key, { name: rawName.trim(), count: s.count });
+      else totals.set(key, { name, count: s.count });
     }
   });
 
-  return Array.from(totals.values())
+  const scores = Array.from(totals.values())
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
+
+  return { scores, total: totalCount };
 }
