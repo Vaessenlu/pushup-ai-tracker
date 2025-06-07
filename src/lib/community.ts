@@ -210,8 +210,10 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   if (error) throw new Error('Fehler beim Laden der Highscores');
 
   const totals = new Map<string, { name: string; count: number }>();
+  const idToName = new Map<string, string>();
   let totalCount = 0;
   (data || []).forEach(r => {
+    const id = (r as Record<string, unknown>).user_id as string | undefined;
     let name: string | undefined =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
@@ -222,9 +224,9 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
         name = emailVal.trim();
       }
     }
-    if (!name && typeof (r as Record<string, unknown>).user_id === 'string') {
-      name = (r as Record<string, unknown>).user_id as string;
-    }
+    if (name && id) idToName.set(id, name);
+    if (!name && id && idToName.has(id)) name = idToName.get(id);
+    if (!name && id) name = id;
     if (!name) return;
     const key = name.toLowerCase();
     totalCount += r.count as number;
@@ -256,10 +258,12 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreRe
   }
 
   const totals = new Map<string, { name: string; count: number }>();
+  const idToName = new Map<string, string>();
   let totalCount = 0;
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
+      const id = (s as Record<string, unknown>).user_id as string | undefined;
       let name: string | undefined =
         typeof s.username === 'string' && s.username.trim()
           ? s.username.trim()
@@ -267,9 +271,9 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreRe
       if (!name && typeof s.email === 'string' && s.email.trim()) {
         name = s.email.trim();
       }
-      if (!name && (s as Record<string, unknown>).user_id) {
-        name = String((s as Record<string, unknown>).user_id);
-      }
+      if (name && id) idToName.set(id, name);
+      if (!name && id && idToName.has(id)) name = idToName.get(id);
+      if (!name && id) name = id;
       if (!name) return;
       const key = name.toLowerCase();
       totalCount += s.count;
