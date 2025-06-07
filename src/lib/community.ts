@@ -211,13 +211,20 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   const totals = new Map<string, { name: string; count: number }>();
   let totalCount = 0;
   (data || []).forEach(r => {
-    const rawName = (r.username as string) || (r.email as string);
-    const key = rawName?.trim().toLowerCase();
-    if (!key) return;
+    let name: string | undefined =
+      typeof r.username === 'string' && r.username.trim()
+        ? r.username.trim()
+        : undefined;
+    if (!name) {
+      const emailVal = (r.email as string) || '';
+      if (emailVal.includes('@')) name = emailVal.trim();
+    }
+    if (!name) return;
+    const key = name.toLowerCase();
     totalCount += r.count as number;
     const existing = totals.get(key);
     if (existing) existing.count += r.count as number;
-    else totals.set(key, { name: rawName.trim(), count: r.count as number });
+    else totals.set(key, { name, count: r.count as number });
   });
 
   const scores = Array.from(totals.values())
@@ -247,13 +254,19 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreRe
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
-      const rawName = s.username || s.email;
-      const key = rawName?.trim().toLowerCase();
-      if (!key) return;
+      let name: string | undefined =
+        typeof s.username === 'string' && s.username.trim()
+          ? s.username.trim()
+          : undefined;
+      if (!name && typeof s.email === 'string' && s.email.includes('@')) {
+        name = s.email.trim();
+      }
+      if (!name) return;
+      const key = name.toLowerCase();
       totalCount += s.count;
       const existing = totals.get(key);
       if (existing) existing.count += s.count;
-      else totals.set(key, { name: rawName.trim(), count: s.count });
+      else totals.set(key, { name, count: s.count });
     }
   });
 
