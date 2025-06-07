@@ -16,9 +16,10 @@ interface CommunityProps {
   email: string | null;
   token: string | null;
   onAuth: (email: string, token: string, username: string) => void;
+  refreshTrigger: number;
 }
 
-export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth }) => {
+export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth, refreshTrigger }) => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -50,7 +51,7 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
       setMonthly(res.scores);
       setMonthlyTotal(res.total);
     });
-  }, [token]);
+  }, [token, refreshTrigger]);
 
   const renderTable = (title: string, scores: ScoreEntry[], total: number) => (
     <Card className="p-6">

@@ -31,6 +31,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
   const [communityToken, setCommunityToken] = useState<string | null>(null);
   const [communityUsername, setCommunityUsername] = useState<string | null>(null);
+  const [highscoreTrigger, setHighscoreTrigger] = useState(0);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('communityEmail');
@@ -112,6 +113,9 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         count: newSession.count,
       });
     }
+
+    // trigger highscore refresh
+    setHighscoreTrigger((t) => t + 1);
   };
 
   const totalPushups = sessions.reduce((sum, session) => sum + session.count, 0);
@@ -229,7 +233,12 @@ const Index: React.FC<IndexProps> = ({ user }) => {
             <SessionHistory sessions={sessions} />
           </TabsContent>
           <TabsContent value="community">
-            <Community email={communityEmail} token={communityToken} onAuth={handleRegister} />
+            <Community
+              email={communityEmail}
+              token={communityToken}
+              onAuth={handleRegister}
+              refreshTrigger={highscoreTrigger}
+            />
           </TabsContent>
         </Tabs>
       </div>
