@@ -64,7 +64,6 @@ export async function saveSessionServer(
   token: string,
   session: Omit<CommunitySession, 'email' | 'username'>,
 ) {
-  // ensure current session
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
 
