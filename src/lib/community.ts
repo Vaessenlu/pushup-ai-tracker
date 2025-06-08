@@ -1,6 +1,7 @@
 export interface CommunitySession {
   email: string;
   username?: string;
+  user_id?: string;
   date: string; // ISO string
   count: number;
 }
@@ -75,210 +76,94 @@ export async function saveSessionServer(
   const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
-  await supabase
-    .from('sessions')
-    .insert({ email, username, date: session.date, count: session.count })
-    .catch(async err => {
-      const msg = (err as { message?: string }).message || '';
-      const code = (err as { code?: string }).code;
-      if (msg.includes('username')) {
-        await supabase.from('sessions').insert({
-          email,
-          date: session.date,
-          count: session.count,
-        });
-      } else if (msg.includes('email') || code === '42703') {
-        try {
+  // Also store locally so highscores include this session
+  saveCommunitySession({
+    email: email || '',
+    username: username || undefined,
+    user_id: userId,
+    date: session.date,
+    count: session.count,
+  });
+
+  try {
+    await supabase
+      .from('sessions')
+      .insert({ email, username, date: session.date, count: session.count })
+      .throwOnError();
+  } catch (err) {
+    const msg = (err as { message?: string }).message || '';
+    const code = (err as { code?: string }).code;
+    if (msg.includes('username')) {
+      await supabase
+        .from('sessions')
+        .insert({ email, date: session.date, count: session.count })
+        .throwOnError();
+    } else if (msg.includes('email') || code === '42703') {
+      try {
+        await supabase
+          .from('sessions')
+          .insert({ user_id: userId, username, created_at: session.date, count: session.count })
+          .throwOnError();
+      } catch (e2) {
+        const msg2 = (e2 as { message?: string }).message || '';
+        if (msg2.includes('username')) {
           await supabase
             .from('sessions')
-            .insert({ user_id: userId, username, created_at: session.date, count: session.count });
-        } catch (e2) {
-          const msg2 = (e2 as { message?: string }).message || '';
-          if (msg2.includes('username')) {
+            .insert({ user_id: userId, created_at: session.date, count: session.count })
+            .throwOnError();
+        } else {
+          throw e2;
+        }
+      }
+    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
+      const onlyDate = session.date.split('T')[0];
+      try {
+        await supabase
+          .from('sessions')
+          .insert({ email, username, date: onlyDate, count: session.count })
+          .throwOnError();
+      } catch (e2) {
+        const msg2 = (e2 as { message?: string }).message || '';
+        const code2 = (e2 as { code?: string }).code;
+        if (msg2.includes('username')) {
+          await supabase
+            .from('sessions')
+            .insert({ email, date: onlyDate, count: session.count })
+            .throwOnError();
+        } else if (msg2.includes('email') || code2 === '42703') {
+          try {
             await supabase
               .from('sessions')
-              .insert({ user_id: userId, created_at: session.date, count: session.count });
-          } else {
-            throw e2;
-          }
-        }
-      } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-        const onlyDate = session.date.split('T')[0];
-        try {
-          await supabase.from('sessions').insert({
-            email,
-            username,
-            date: onlyDate,
-            count: session.count,
-          });
-        } catch (e2) {
-          const msg2 = (e2 as { message?: string }).message || '';
-          const code2 = (e2 as { code?: string }).code;
-          if (msg2.includes('username')) {
-            await supabase.from('sessions').insert({
-              email,
-              date: onlyDate,
-              count: session.count,
-            });
-          } else if (msg2.includes('email') || code2 === '42703') {
-            try {
+              .insert({ user_id: userId, username, created_at: onlyDate, count: session.count })
+              .throwOnError();
+          } catch (e3) {
+            const msg3 = (e3 as { message?: string }).message || '';
+            if (msg3.includes('username')) {
               await supabase
                 .from('sessions')
-                .insert({ user_id: userId, username, created_at: onlyDate, count: session.count });
-            } catch (e3) {
-              const msg3 = (e3 as { message?: string }).message || '';
-              if (msg3.includes('username')) {
-                await supabase
-                  .from('sessions')
-                  .insert({ user_id: userId, created_at: onlyDate, count: session.count });
-              } else {
-                throw e3;
-              }
+                .insert({ user_id: userId, created_at: onlyDate, count: session.count })
+                .throwOnError();
+            } else {
+              throw e3;
             }
-          } else {
-            throw e2;
           }
+        } else {
+          throw e2;
         }
-      } else {
-        throw err;
       }
-    });
+    } else {
+      throw err;
+    }
+  }
 }
 
 export async function fetchHighscores(
   period: 'day' | 'week' | 'month',
-  exercise: 'pushup' | 'squat' = 'pushup'
+  exercise: 'pushup' | 'squat' = 'pushup',
 ): Promise<HighscoreResult> {
-  const now = new Date();
-  let start: Date;
-  if (period === 'day') {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  } else if (period === 'week') {
-    const day = (now.getDay() + 6) % 7;
-    start = new Date(now);
-    start.setDate(now.getDate() - day);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-
-  const iso = start.toISOString();
-  let exerciseAvailable = true;
-  let { data, error } = await supabase
-    .from('sessions')
-    .select('email, username, count, date, exercise')
-    .eq('exercise', exercise)
-    .gte('date', iso);
-  if (error && (error.message?.includes('exercise') || error.code === '42703')) {
-    exerciseAvailable = false;
-    const res = await supabase
-      .from('sessions')
-      .select('email, username, count, date')
-      .gte('date', iso);
-    data = res.data || null;
-    error = res.error;
-  }
-  if (error) {
-    const msg = error.message || '';
-    const code = error.code;
-    if (msg.includes('email') || code === '42703') {
-      let fbQuery = supabase
-        .from('sessions')
-        .select(
-          exerciseAvailable
-            ? 'user_id, username, count, created_at, exercise'
-            : 'user_id, username, count, created_at'
-        )
-        .gte('created_at', iso);
-      if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
-      let fb = await fbQuery;
-      if (fb.error && fb.error.code === '42703') {
-        fbQuery = supabase
-          .from('sessions')
-          .select(
-            exerciseAvailable
-              ? 'user_id, count, created_at, exercise'
-              : 'user_id, count, created_at'
-          )
-          .gte('created_at', iso);
-        if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
-        fb = await fbQuery;
-        data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
-      } else {
-        data = fb.data?.map(r => ({ user_id: r.user_id, username: r.username, count: r.count, date: r.created_at }));
-      }
-      error = fb.error;
-    } else if (msg.includes('username')) {
-      let fallbackQuery = supabase
-        .from('sessions')
-        .select(
-          exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date'
-        )
-        .gte('date', iso);
-      if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
-      const fallback = await fallbackQuery;
-      data = fallback.data;
-      error = fallback.error;
-    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-      let fallbackQuery = supabase
-        .from('sessions')
-        .select(
-          exerciseAvailable
-            ? 'email, username, count, date, exercise'
-            : 'email, username, count, date'
-        )
-        .gte('date', iso.split('T')[0]);
-      if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
-      let fallback = await fallbackQuery;
-      if (fallback.error) {
-        let fb2Query = supabase
-          .from('sessions')
-          .select(exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date')
-          .gte('date', iso.split('T')[0]);
-        if (exerciseAvailable) fb2Query = fb2Query.eq('exercise', exercise);
-        const fb2 = await fb2Query;
-        data = fb2.data;
-        error = fb2.error;
-      } else {
-        data = fallback.data;
-        error = null;
-      }
-    }
-  }
-  if (error) throw new Error('Fehler beim Laden der Highscores');
-
-  const totals = new Map<string, { name: string; count: number }>();
-  const idToName = new Map<string, string>();
-  let totalCount = 0;
-  (data || []).forEach(r => {
-    const id = (r as Record<string, unknown>).user_id as string | undefined;
-    let name: string | undefined =
-      typeof r.username === 'string' && r.username.trim()
-        ? r.username.trim()
-        : undefined;
-    if (!name) {
-      const emailVal = (r.email as string) || '';
-      if (emailVal.includes('@')) {
-        name = emailVal.trim();
-      }
-    }
-    if (name && id) idToName.set(id, name);
-    if (!name && id && idToName.has(id)) name = idToName.get(id);
-    if (!name && id) name = id;
-    if (!name) return;
-    const key = name.toLowerCase();
-    totalCount += r.count as number;
-    const existing = totals.get(key);
-    if (existing) existing.count += r.count as number;
-    else totals.set(key, { name, count: r.count as number });
-  });
-
-  const scores = Array.from(totals.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
-
-  return { scores, total: totalCount };
+  return Promise.resolve(computeHighscores(period, exercise));
 }
+
 
 export function computeHighscores(
   period: 'day' | 'week' | 'month',

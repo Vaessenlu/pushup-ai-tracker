@@ -44,7 +44,6 @@ import {
   UNIMPORTANT_LANDMARKS
 } from '@/lib/PushupDetector';
 import { SquatDetector } from '@/lib/SquatDetector';
-import { supabase } from '@/lib/supabaseClient';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
@@ -280,27 +279,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     const avgTimePerRepSquat = squatCount > 0 ? duration / squatCount : 0;
 
     if (count > 0) {
-      if (user?.id) {
-        try {
-          await supabase
-            .from('sessions')
-            .insert({ user_id: user.id, count, duration, exercise: 'pushup' })
-            .catch(async (e) => {
-              const msg = (e as { message?: string }).message || '';
-              if (msg.includes('exercise')) {
-                await supabase.from('sessions').insert({
-                  user_id: user.id,
-                  count,
-                  duration,
-                });
-              } else {
-                throw e;
-              }
-            });
-        } catch (e) {
-          console.error('Supabase insert failed', e);
-        }
-      }
 
       onSessionComplete({
         date: new Date(),
@@ -317,27 +295,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
 
     if (squatCount > 0) {
-      if (user?.id) {
-        try {
-          await supabase
-            .from('sessions')
-            .insert({ user_id: user.id, count: squatCount, duration, exercise: 'squat' })
-            .catch(async (e) => {
-              const msg = (e as { message?: string }).message || '';
-              if (msg.includes('exercise')) {
-                await supabase.from('sessions').insert({
-                  user_id: user.id,
-                  count: squatCount,
-                  duration,
-                });
-              } else {
-                throw e;
-              }
-            });
-        } catch (e) {
-          console.error('Supabase insert failed', e);
-        }
-      }
 
       onSessionComplete({
         date: new Date(),
@@ -358,7 +315,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setCount(0);
     setSquatCount(0);
     setSessionTime(0);
-  }, [count, squatCount, onSessionComplete, setIsTracking, toast, user]);
+  }, [count, squatCount, onSessionComplete, setIsTracking, toast]);
 
   // Animation loop for pose detection
   useEffect(() => {
