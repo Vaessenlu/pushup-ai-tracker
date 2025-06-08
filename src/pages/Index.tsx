@@ -19,6 +19,7 @@ export interface Session {
   count: number;
   duration: number;
   avgTimePerRep: number;
+  exercise: 'pushup' | 'squat';
 }
 
 interface IndexProps {
@@ -50,7 +51,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
       const { data } = await supabase
         .from('sessions')
-        .select('id, count, duration, created_at')
+        .select('id, count, duration, created_at, exercise')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (data) {
@@ -64,6 +65,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
               (s.duration as number) && (s.count as number)
                 ? (s.duration as number) / (s.count as number)
                 : 0,
+            exercise: (s as Record<string, string | number>).exercise as 'pushup' | 'squat' || 'pushup',
           }))
         );
       }
@@ -89,14 +91,28 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       try {
         const { data } = await supabase
           .from('sessions')
-          .insert({ user_id: user.id, count: session.count, duration: session.duration })
+          .insert({ user_id: user.id, count: session.count, duration: session.duration, exercise: session.exercise })
           .select('id')
           .single();
         if (data?.id) {
           newSession = { ...newSession, id: data.id };
         }
       } catch (e) {
-        console.error('Supabase insert failed', e);
+        const msg = (e as { message?: string }).message || '';
+        if (msg.includes('exercise')) {
+          try {
+            const { data } = await supabase
+              .from('sessions')
+              .insert({ user_id: user.id, count: session.count, duration: session.duration })
+              .select('id')
+              .single();
+            if (data?.id) newSession = { ...newSession, id: data.id };
+          } catch (e2) {
+            console.error('Supabase insert failed', e2);
+          }
+        } else {
+          console.error('Supabase insert failed', e);
+        }
       }
     }
     setSessions(prev => [newSession, ...prev]);
@@ -122,7 +138,8 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     setHighscoreTrigger((t) => t + 1);
   };
 
-  const totalPushups = sessions.reduce((sum, session) => sum + session.count, 0);
+  const totalPushups = sessions.filter(s => s.exercise === 'pushup').reduce((sum, s) => sum + s.count, 0);
+  const totalSquats = sessions.filter(s => s.exercise === 'squat').reduce((sum, s) => sum + s.count, 0);
   const totalSessions = sessions.length;
   const avgPerSession = totalSessions > 0 ? Math.round(totalPushups / totalSessions) : 0;
   const bestSession = sessions.length > 0 ? Math.max(...sessions.map(s => s.count)) : 0;
@@ -157,13 +174,23 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card className="p-6 bg-gradient-to-br from-orange-400 to-orange-500 text-white border-0">
             <div className="flex items-center gap-3">
               <Target className="h-8 w-8" />
               <div>
                 <p className="text-blue-100 text-sm">Gesamt</p>
                 <p className="text-2xl font-bold">{totalPushups}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 bg-gradient-to-br from-green-400 to-emerald-500 text-white border-0">
+            <div className="flex items-center gap-3">
+              <Activity className="h-8 w-8" />
+              <div>
+                <p className="text-green-100 text-sm">Kniebeugen</p>
+                <p className="text-2xl font-bold">{totalSquats}</p>
               </div>
             </div>
           </Card>
@@ -230,19 +257,32 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           </TabsContent>
 
           <TabsContent value="stats">
-            <StatsDisplay sessions={sessions} />
+            <div className="grid md:grid-cols-2 gap-4">
+              <StatsDisplay sessions={sessions} exercise="pushup" />
+              <StatsDisplay sessions={sessions} exercise="squat" />
+            </div>
           </TabsContent>
 
           <TabsContent value="history">
             <SessionHistory sessions={sessions} />
           </TabsContent>
           <TabsContent value="community">
-            <Community
-              email={communityEmail}
-              token={communityToken}
-              onAuth={handleRegister}
-              refreshTrigger={highscoreTrigger}
-            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <Community
+                email={communityEmail}
+                token={communityToken}
+                onAuth={handleRegister}
+                refreshTrigger={highscoreTrigger}
+                exercise="pushup"
+              />
+              <Community
+                email={communityEmail}
+                token={communityToken}
+                onAuth={handleRegister}
+                refreshTrigger={highscoreTrigger}
+                exercise="squat"
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

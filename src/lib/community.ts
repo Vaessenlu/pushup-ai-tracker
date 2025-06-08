@@ -145,7 +145,10 @@ export async function saveSessionServer(
     });
 }
 
-export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise<HighscoreResult> {
+export async function fetchHighscores(
+  period: 'day' | 'week' | 'month',
+  exercise: 'pushup' | 'squat' = 'pushup'
+): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
   if (period === 'day') {
@@ -162,7 +165,8 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select('email, username, count, date')
+    .select('email, username, count, date, exercise')
+    .eq('exercise', exercise)
     .gte('date', iso);
   if (error) {
     const msg = error.message || '';
@@ -170,12 +174,14 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
     if (msg.includes('email') || code === '42703') {
       let fb = await supabase
         .from('sessions')
-        .select('user_id, username, count, created_at')
+        .select('user_id, username, count, created_at, exercise')
+        .eq('exercise', exercise)
         .gte('created_at', iso);
       if (fb.error && fb.error.code === '42703') {
         fb = await supabase
           .from('sessions')
-          .select('user_id, count, created_at')
+          .select('user_id, count, created_at, exercise')
+          .eq('exercise', exercise)
           .gte('created_at', iso);
         data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
       } else {
@@ -185,19 +191,22 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
     } else if (msg.includes('username')) {
       const fallback = await supabase
         .from('sessions')
-        .select('email, count, date')
+        .select('email, count, date, exercise')
+        .eq('exercise', exercise)
         .gte('date', iso);
       data = fallback.data;
       error = fallback.error;
     } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
       const fallback = await supabase
         .from('sessions')
-        .select('email, username, count, date')
+        .select('email, username, count, date, exercise')
+        .eq('exercise', exercise)
         .gte('date', iso.split('T')[0]);
       if (fallback.error) {
         const fb2 = await supabase
           .from('sessions')
-          .select('email, count, date')
+          .select('email, count, date, exercise')
+          .eq('exercise', exercise)
           .gte('date', iso.split('T')[0]);
         data = fb2.data;
         error = fb2.error;
@@ -242,7 +251,10 @@ export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise
   return { scores, total: totalCount };
 }
 
-export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreResult {
+export function computeHighscores(
+  period: 'day' | 'week' | 'month',
+  exercise: 'pushup' | 'squat' = 'pushup'
+): HighscoreResult {
   const sessions = loadCommunitySessions();
   const now = new Date();
   let start: Date;
@@ -263,6 +275,9 @@ export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreRe
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
+      if ((s as Record<string, unknown>).exercise && (s as Record<string, unknown>).exercise !== exercise) {
+        return;
+      }
       const id = (s as Record<string, unknown>).user_id as string | undefined;
       let name: string | undefined =
         typeof s.username === 'string' && s.username.trim()

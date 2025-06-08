@@ -17,9 +17,10 @@ interface CommunityProps {
   token: string | null;
   onAuth: (email: string, token: string, username: string) => void;
   refreshTrigger: number;
+  exercise: 'pushup' | 'squat';
 }
 
-export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth, refreshTrigger }) => {
+export const Community: React.FC<CommunityProps> = ({ email, token: propToken, onAuth, refreshTrigger, exercise }) => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -39,19 +40,19 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   }, [propToken]);
 
   useEffect(() => {
-    fetchHighscores('day').then((res) => {
+    fetchHighscores('day', exercise).then((res) => {
       setDaily(res.scores);
       setDailyTotal(res.total);
     });
-    fetchHighscores('week').then((res) => {
+    fetchHighscores('week', exercise).then((res) => {
       setWeekly(res.scores);
       setWeeklyTotal(res.total);
     });
-    fetchHighscores('month').then((res) => {
+    fetchHighscores('month', exercise).then((res) => {
       setMonthly(res.scores);
       setMonthlyTotal(res.total);
     });
-  }, [token, refreshTrigger]);
+  }, [token, refreshTrigger, exercise]);
 
   const renderTable = (title: string, scores: ScoreEntry[], total: number) => (
     <Card className="p-6">

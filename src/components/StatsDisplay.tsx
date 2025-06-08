@@ -8,9 +8,10 @@ import { TrendingUp, Clock, Zap, Target } from 'lucide-react';
 
 interface StatsDisplayProps {
   sessions: Session[];
+  exercise: 'pushup' | 'squat';
 }
 
-export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
+export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions, exercise }) => {
   if (sessions.length === 0) {
     return (
       <Card className="p-8">
@@ -23,15 +24,17 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
     );
   }
 
+  const filtered = sessions.filter(s => s.exercise === exercise);
+
   // Calculate statistics
-  const totalPushups = sessions.reduce((sum, session) => sum + session.count, 0);
-  const totalTime = sessions.reduce((sum, session) => sum + session.duration, 0);
-  const avgPerSession = Math.round(totalPushups / sessions.length);
-  const bestSession = Math.max(...sessions.map(s => s.count));
+  const totalPushups = filtered.reduce((sum, session) => sum + session.count, 0);
+  const totalTime = filtered.reduce((sum, session) => sum + session.duration, 0);
+  const avgPerSession = filtered.length > 0 ? Math.round(totalPushups / filtered.length) : 0;
+  const bestSession = filtered.length > 0 ? Math.max(...filtered.map(s => s.count)) : 0;
   const avgTimePerRep = totalPushups > 0 ? totalTime / totalPushups : 0;
 
   // Prepare chart data (last 10 sessions)
-  const chartData = sessions.slice(0, 10).reverse().map((session, index) => ({
+  const chartData = filtered.slice(0, 10).reverse().map((session, index) => ({
     session: `#${index + 1}`,
     count: session.count,
     duration: session.duration,
@@ -40,7 +43,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
   }));
 
   // Weekly progress
-  const weeklyData = sessions.reduce((acc, session) => {
+  const weeklyData = filtered.reduce((acc, session) => {
     const week = getWeekString(session.date);
     if (!acc[week]) {
       acc[week] = { week, count: 0, sessions: 0 };
@@ -60,6 +63,9 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
 
   return (
     <div className="space-y-6">
+      <h2 className="text-xl font-semibold">
+        {exercise === 'pushup' ? 'Liegestütze' : 'Kniebeugen'}
+      </h2>
       {/* Key Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-6 bg-gradient-to-br from-orange-400 to-orange-500 text-white">
@@ -86,7 +92,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
           <div className="flex items-center gap-3">
             <Clock className="h-8 w-8" />
             <div>
-              <p className="text-purple-100 text-sm">Ø Zeit/Liegestütze</p>
+              <p className="text-purple-100 text-sm">Ø Zeit/Wiederholung</p>
               <p className="text-2xl font-bold">{avgTimePerRep.toFixed(1)}s</p>
             </div>
           </div>
@@ -121,7 +127,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
               <Tooltip 
                 labelFormatter={(label) => `Session ${label}`}
                 formatter={(value, name) => [
-                  name === 'count' ? `${value} Liegestützen` : `${value}s`,
+                  name === 'count' ? `${value} Wiederholungen` : `${value}s`,
                   name === 'count' ? 'Anzahl' : 'Dauer'
                 ]}
               />
@@ -148,7 +154,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
               <YAxis />
               <Tooltip 
                 formatter={(value, name) => [
-                  `${value} ${name === 'count' ? 'Liegestützen' : 'Sessions'}`,
+                  `${value} ${name === 'count' ? 'Wiederholungen' : 'Sessions'}`,
                   name === 'count' ? 'Gesamt' : 'Sessions'
                 ]}
               />
@@ -178,7 +184,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Beste Woche</span>
               <span className="font-semibold">
-                {weeklyChartData.length > 0 ? Math.max(...weeklyChartData.map(w => w.count)) : 0} Liegestützen
+                {weeklyChartData.length > 0 ? Math.max(...weeklyChartData.map(w => w.count)) : 0} Wiederholungen
               </span>
             </div>
           </div>
@@ -189,7 +195,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions }) => {
           <div className="space-y-4">
             <div className="p-3 bg-blue-50 rounded-lg">
               <p className="text-sm font-medium text-blue-900">Nächstes Ziel</p>
-              <p className="text-blue-700">{bestSession + 5} Liegestützen in einer Session</p>
+              <p className="text-blue-700">{bestSession + 5} Wiederholungen in einer Session</p>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
               <p className="text-sm font-medium text-green-900">Empfehlung</p>
