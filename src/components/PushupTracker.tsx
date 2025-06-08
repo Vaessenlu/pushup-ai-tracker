@@ -285,20 +285,21 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           await supabase
             .from('sessions')
             .insert({ user_id: user.id, count, duration, exercise: 'pushup' })
-            .catch(async (e) => {
-              const msg = (e as { message?: string }).message || '';
-              if (msg.includes('exercise')) {
-                await supabase.from('sessions').insert({
-                  user_id: user.id,
-                  count,
-                  duration,
-                });
-              } else {
-                throw e;
-              }
-            });
+            .throwOnError();
         } catch (e) {
-          console.error('Supabase insert failed', e);
+          const msg = (e as { message?: string }).message || '';
+          if (msg.includes('exercise')) {
+            try {
+              await supabase
+                .from('sessions')
+                .insert({ user_id: user.id, count, duration })
+                .throwOnError();
+            } catch (e2) {
+              console.error('Supabase insert failed', e2);
+            }
+          } else {
+            console.error('Supabase insert failed', e);
+          }
         }
       }
 
@@ -322,20 +323,21 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           await supabase
             .from('sessions')
             .insert({ user_id: user.id, count: squatCount, duration, exercise: 'squat' })
-            .catch(async (e) => {
-              const msg = (e as { message?: string }).message || '';
-              if (msg.includes('exercise')) {
-                await supabase.from('sessions').insert({
-                  user_id: user.id,
-                  count: squatCount,
-                  duration,
-                });
-              } else {
-                throw e;
-              }
-            });
+            .throwOnError();
         } catch (e) {
-          console.error('Supabase insert failed', e);
+          const msg = (e as { message?: string }).message || '';
+          if (msg.includes('exercise')) {
+            try {
+              await supabase
+                .from('sessions')
+                .insert({ user_id: user.id, count: squatCount, duration })
+                .throwOnError();
+            } catch (e2) {
+              console.error('Supabase insert failed', e2);
+            }
+          } else {
+            console.error('Supabase insert failed', e);
+          }
         }
       }
 
