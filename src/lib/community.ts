@@ -166,14 +166,18 @@ export async function fetchHighscores(
   let exerciseAvailable = true;
   let { data, error } = await supabase
     .from('sessions')
-    .select('email, username, count, date, exercise')
+    .select(
+      'email, username, count, date, exercise, user:auth.users!sessions_user_id_fkey(username)'
+    )
     .eq('exercise', exercise)
     .gte('date', iso);
   if (error && (error.message?.includes('exercise') || error.code === '42703')) {
     exerciseAvailable = false;
     const res = await supabase
       .from('sessions')
-      .select('email, username, count, date')
+      .select(
+        'email, username, count, date, user:auth.users!sessions_user_id_fkey(username)'
+      )
       .gte('date', iso);
     data = res.data || null;
     error = res.error;
@@ -186,8 +190,8 @@ export async function fetchHighscores(
         .from('sessions')
         .select(
           exerciseAvailable
-            ? 'user_id, username, count, created_at, exercise'
-            : 'user_id, username, count, created_at'
+            ? 'user_id, username, count, created_at, exercise, user:auth.users!sessions_user_id_fkey(username)'
+            : 'user_id, username, count, created_at, user:auth.users!sessions_user_id_fkey(username)'
         )
         .gte('created_at', iso);
       if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
@@ -197,22 +201,29 @@ export async function fetchHighscores(
           .from('sessions')
           .select(
             exerciseAvailable
-              ? 'user_id, count, created_at, exercise'
-              : 'user_id, count, created_at'
+              ? 'user_id, count, created_at, exercise, user:auth.users!sessions_user_id_fkey(username)'
+              : 'user_id, count, created_at, user:auth.users!sessions_user_id_fkey(username)'
           )
           .gte('created_at', iso);
         if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
         fb = await fbQuery;
         data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
       } else {
-        data = fb.data?.map(r => ({ user_id: r.user_id, username: r.username, count: r.count, date: r.created_at }));
+        data = fb.data?.map(r => ({
+          user_id: r.user_id,
+          username: (r.username as string) || (r as { user?: { username?: string } }).user?.username,
+          count: r.count,
+          date: r.created_at,
+        }));
       }
       error = fb.error;
     } else if (msg.includes('username')) {
       let fallbackQuery = supabase
         .from('sessions')
         .select(
-          exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date'
+          exerciseAvailable
+            ? 'email, count, date, exercise, user:auth.users!sessions_user_id_fkey(username)'
+            : 'email, count, date, user:auth.users!sessions_user_id_fkey(username)'
         )
         .gte('date', iso);
       if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
@@ -224,16 +235,20 @@ export async function fetchHighscores(
         .from('sessions')
         .select(
           exerciseAvailable
-            ? 'email, username, count, date, exercise'
-            : 'email, username, count, date'
+            ? 'email, username, count, date, exercise, user:auth.users!sessions_user_id_fkey(username)'
+            : 'email, username, count, date, user:auth.users!sessions_user_id_fkey(username)'
         )
         .gte('date', iso.split('T')[0]);
       if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
-      let fallback = await fallbackQuery;
+      const fallback = await fallbackQuery;
       if (fallback.error) {
         let fb2Query = supabase
           .from('sessions')
-          .select(exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date')
+          .select(
+            exerciseAvailable
+              ? 'email, count, date, exercise, user:auth.users!sessions_user_id_fkey(username)'
+              : 'email, count, date, user:auth.users!sessions_user_id_fkey(username)'
+          )
           .gte('date', iso.split('T')[0]);
         if (exerciseAvailable) fb2Query = fb2Query.eq('exercise', exercise);
         const fb2 = await fb2Query;
@@ -255,9 +270,9 @@ export async function fetchHighscores(
     let name: string | undefined =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
-        : undefined;
+        : (r as { user?: { username?: string } }).user?.username;
     if (!name) {
-      const emailVal = (r.email as string) || '';
+      const emailVal = (r.email as string) || (r as { user?: { email?: string } }).user?.email || '';
       if (emailVal.includes('@')) {
         name = emailVal.trim();
       }
