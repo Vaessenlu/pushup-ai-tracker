@@ -1,6 +1,7 @@
 export interface CommunitySession {
   email: string;
   username?: string;
+  user_id?: string;
   date: string; // ISO string
   count: number;
 }
@@ -74,6 +75,15 @@ export async function saveSessionServer(
   const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
   const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
+
+  // Also store locally so highscores include this session
+  saveCommunitySession({
+    email: email || '',
+    username: username || undefined,
+    user_id: userId,
+    date: session.date,
+    count: session.count,
+  });
 
   try {
     await supabase
