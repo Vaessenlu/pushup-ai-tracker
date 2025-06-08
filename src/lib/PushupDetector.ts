@@ -1,299 +1,283 @@
-// Pose detection and push-up counting logic
-import type {
-  Pose,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
+export interface CommunitySession {
+  email: string;
+  username?: string;
+  date: string; // ISO string
+  count: number;
+}
 
-type PoseInstance = Pose;
+const STORAGE_KEY = 'communitySessions';
 
-export const POSE_LANDMARK_NAMES = [
-  'NOSE',
-  'LEFT_EYE_INNER',
-  'LEFT_EYE',
-  'LEFT_EYE_OUTER',
-  'RIGHT_EYE_INNER',
-  'RIGHT_EYE',
-  'RIGHT_EYE_OUTER',
-  'LEFT_EAR',
-  'RIGHT_EAR',
-  'MOUTH_LEFT',
-  'MOUTH_RIGHT',
-  'LEFT_SHOULDER',
-  'RIGHT_SHOULDER',
-  'LEFT_ELBOW',
-  'RIGHT_ELBOW',
-  'LEFT_WRIST',
-  'RIGHT_WRIST',
-  'LEFT_PINKY',
-  'RIGHT_PINKY',
-  'LEFT_INDEX',
-  'RIGHT_INDEX',
-  'LEFT_THUMB',
-  'RIGHT_THUMB',
-  'LEFT_HIP',
-  'RIGHT_HIP',
-  'LEFT_KNEE',
-  'RIGHT_KNEE',
-  'LEFT_ANKLE',
-  'RIGHT_ANKLE',
-  'LEFT_HEEL',
-  'RIGHT_HEEL',
-  'LEFT_FOOT_INDEX',
-  'RIGHT_FOOT_INDEX'
-];
+export interface ScoreEntry {
+  name: string;
+  count: number;
+}
 
-// Indices of landmarks not relevant for push-up detection (face & fingers)
-export const UNIMPORTANT_LANDMARKS = [
-  // face landmarks
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  // finger landmarks
-  17, 18, 19, 20, 21, 22,
-];
+export interface HighscoreResult {
+  scores: ScoreEntry[];
+  total: number;
+}
 
-export class PushupDetector {
-  private pose: PoseInstance | null = null;
-  private initPromise: Promise<void>;
-  private isDown = false;
-  private count = 0;
-  private legSeen = false;
-  // keeps a rolling window of average elbow angles
-  private angleHistory: number[] = [];
-  // keeps a rolling window of torso orientation angles
-  private torsoHistory: number[] = [];
-  private framesBelowVisibility = 0;
-  private downFrameCount = 0;
-  private upFrameCount = 0;
-  /**
-   * Size of the smoothing window used for averaging angles.
-   * Higher values give smoother results but introduce latency.
-   */
-  private static readonly ANGLE_WINDOW = 5;
-  private static readonly DOWN_THRESHOLD = 100;
-  private static readonly UP_THRESHOLD = 160;
-  /** Minimum consecutive frames an angle must stay beyond a threshold. */
-  private static readonly FRAME_COUNT_THRESHOLD = 3;
-  private static readonly LEG_VISIBILITY_THRESHOLD = 0.3;
-  /**
-   * Number of consecutive frames legs must be invisible before the frame is
-   * ignored to avoid false detections when the user leaves the frame.
-   */
-  private static readonly LEG_MISSING_FRAMES = 2;
-  private static readonly ORIENTATION_CHANGE_THRESHOLD = 15; // degrees
-  private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
-  private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
-
-  constructor() {
-    this.initPromise = this.initPose();
-  }
-
-  private async initPose() {
-    const mp = await import('@mediapipe/pose');
-    // The package ships as a UMD bundle which doesn't always expose the
-    // constructor via ESM exports.  Some bundlers return an empty module
-    // object on dynamic import.  Fallback to the global `Pose` if necessary.
-    const PoseCtor: typeof Pose =
-      (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
-      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
-    if (!PoseCtor) {
-      throw new Error('Failed to load Pose constructor from @mediapipe/pose');
-    }
-    this.pose = new PoseCtor({
-      locateFile: (file: string) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
-
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-        if (this.onPoseResults) {
-          this.onPoseResults(results.poseLandmarks);
-        }
-      }
-    });
-  }
-
-  setOnPoseResults(callback: (results: PoseResults['poseLandmarks']) => void) {
-    this.onPoseResults = callback;
-  }
-
-  async detect(videoElement: HTMLVideoElement): Promise<number> {
-    await this.initPromise;
-    if (!this.pose) return this.count;
-    if (!this.isInitialized) {
-      await this.pose.send({ image: videoElement });
-      return this.count;
-    }
-
-    await this.pose.send({ image: videoElement });
-    return this.count;
-  }
-
-  private calculateAngle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
-    const ab = { x: a.x - b.x, y: a.y - b.y };
-    const cb = { x: c.x - b.x, y: c.y - b.y };
-    const dot = ab.x * cb.x + ab.y * cb.y;
-    const magAB = Math.hypot(ab.x, ab.y);
-    const magCB = Math.hypot(cb.x, cb.y);
-    const angle = Math.acos(dot / (magAB * magCB));
-    return (angle * 180) / Math.PI;
-  }
-
-  private processLandmarks(landmarks: NormalizedLandmarkList) {
-    const leftShoulder = landmarks[11];
-    const leftElbow = landmarks[13];
-    const leftWrist = landmarks[15];
-    const rightShoulder = landmarks[12];
-    const rightElbow = landmarks[14];
-    const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftKnee = landmarks[25];
-    const rightKnee = landmarks[26];
-    const leftAnkle = landmarks[27];
-    const rightAnkle = landmarks[28];
-    const leftFoot = landmarks[31];
-    const rightFoot = landmarks[32];
-
-    if (
-      !leftShoulder ||
-      !leftElbow ||
-      !leftWrist ||
-      !rightShoulder ||
-      !rightElbow ||
-      !rightWrist
-    ) {
-      return;
-    }
-
-    const legVisible = [
-      leftHip,
-      rightHip,
-      leftKnee,
-      rightKnee,
-      leftAnkle,
-      rightAnkle,
-      leftFoot,
-      rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > PushupDetector.LEG_VISIBILITY_THRESHOLD);
-
-    if (!legVisible) {
-      this.framesBelowVisibility++;
-      if (this.framesBelowVisibility > PushupDetector.LEG_MISSING_FRAMES) {
-        return;
-      }
-    } else {
-      this.framesBelowVisibility = 0;
-    }
-
-    const shoulderMid = {
-      x: (leftShoulder.x + rightShoulder.x) / 2,
-      y: (leftShoulder.y + rightShoulder.y) / 2
-    };
-    const hipMid = {
-      x: (leftHip.x + rightHip.x) / 2,
-      y: (leftHip.y + rightHip.y) / 2
-    };
-    const torsoAngle =
-      (Math.atan2(hipMid.y - shoulderMid.y, hipMid.x - shoulderMid.x) * 180) /
-      Math.PI;
-
-    const prevOrientation = this.torsoHistory[this.torsoHistory.length - 1];
-    if (
-      prevOrientation !== undefined &&
-      Math.abs(torsoAngle - prevOrientation) >
-        PushupDetector.ORIENTATION_CHANGE_THRESHOLD
-    ) {
-      return;
-    }
-
-    this.torsoHistory.push(torsoAngle);
-    if (this.torsoHistory.length > PushupDetector.ANGLE_WINDOW) {
-      this.torsoHistory.shift();
-    }
-
-    const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
-    const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
-    const avgAngle = (leftAngle + rightAngle) / 2;
-
-    this.angleHistory.push(avgAngle);
-    if (this.angleHistory.length > PushupDetector.ANGLE_WINDOW) {
-      this.angleHistory.shift();
-    }
-
-    const smoothAngle =
-      this.angleHistory.reduce((s, v) => s + v, 0) / this.angleHistory.length;
-
-    if (smoothAngle < PushupDetector.DOWN_THRESHOLD) {
-      this.downFrameCount++;
-    } else {
-      this.downFrameCount = 0;
-    }
-
-    if (smoothAngle > PushupDetector.UP_THRESHOLD) {
-      this.upFrameCount++;
-    } else {
-      this.upFrameCount = 0;
-    }
-
-    if (
-      this.downFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
-      !this.isDown &&
-      legVisible
-    ) {
-      this.isDown = true;
-      this.legSeen = true;
-    }
-
-    if (
-      this.upFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
-      this.isDown
-    ) {
-      this.isDown = false;
-      if (this.legSeen) {
-        this.count++;
-      }
-      this.legSeen = false;
-    }
-  }
-
-  reset() {
-    this.count = 0;
-    this.isDown = false;
-    this.legSeen = false;
-    this.landmarks = null;
-  }
-
-  getCount() {
-    return this.count;
-  }
-
-  getLandmarks() {
-    return this.landmarks;
-  }
-
-  isReady() {
-    return this.isInitialized;
-  }
-
-  cleanup() {
-    if (this.pose) {
-      this.pose.reset();
-    }
+export function loadCommunitySessions(): CommunitySession[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch {
+    return [];
   }
 }
 
-export type { PoseResults };
+export function saveCommunitySession(session: CommunitySession) {
+  const sessions = loadCommunitySessions();
+  sessions.push(session);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
 
+import { supabase } from './supabaseClient';
+
+export async function register(
+  email: string,
+  password: string,
+  username: string,
+): Promise<string> {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { username } },
+  });
+  if (error || !data.session) {
+    throw new Error('Registrierung fehlgeschlagen');
+  }
+  return data.session.access_token;
+}
+
+export async function login(email: string, password: string): Promise<string> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.session) {
+    throw new Error('Login fehlgeschlagen');
+  }
+  return data.session.access_token;
+}
+
+export async function saveSessionServer(
+  token: string,
+  session: Omit<CommunitySession, 'email' | 'username'>,
+) {
+  const current = await supabase.auth.getSession();
+  if (!current.data.session) throw new Error('Nicht eingeloggt');
+
+  const { data: userData } = await supabase.auth.getUser();
+  const email = userData.user?.email;
+  const userId = userData.user?.id;
+  const username = (userData.user?.user_metadata as { username?: string })?.username;
+  if (!email && !userId) throw new Error('Kein Benutzer gefunden');
+
+  await supabase
+    .from('sessions')
+    .insert({ email, username, date: session.date, count: session.count })
+    .catch(async err => {
+      const msg = (err as { message?: string }).message || '';
+      const code = (err as { code?: string }).code;
+      if (msg.includes('username')) {
+        await supabase.from('sessions').insert({
+          email,
+          date: session.date,
+          count: session.count,
+        });
+      } else if (msg.includes('email') || code === '42703') {
+        try {
+          await supabase
+            .from('sessions')
+            .insert({ user_id: userId, username, created_at: session.date, count: session.count });
+        } catch (e2) {
+          const msg2 = (e2 as { message?: string }).message || '';
+          if (msg2.includes('username')) {
+            await supabase
+              .from('sessions')
+              .insert({ user_id: userId, created_at: session.date, count: session.count });
+          } else {
+            throw e2;
+          }
+        }
+      } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
+        const onlyDate = session.date.split('T')[0];
+        try {
+          await supabase.from('sessions').insert({
+            email,
+            username,
+            date: onlyDate,
+            count: session.count,
+          });
+        } catch (e2) {
+          const msg2 = (e2 as { message?: string }).message || '';
+          const code2 = (e2 as { code?: string }).code;
+          if (msg2.includes('username')) {
+            await supabase.from('sessions').insert({
+              email,
+              date: onlyDate,
+              count: session.count,
+            });
+          } else if (msg2.includes('email') || code2 === '42703') {
+            try {
+              await supabase
+                .from('sessions')
+                .insert({ user_id: userId, username, created_at: onlyDate, count: session.count });
+            } catch (e3) {
+              const msg3 = (e3 as { message?: string }).message || '';
+              if (msg3.includes('username')) {
+                await supabase
+                  .from('sessions')
+                  .insert({ user_id: userId, created_at: onlyDate, count: session.count });
+              } else {
+                throw e3;
+              }
+            }
+          } else {
+            throw e2;
+          }
+        }
+      } else {
+        throw err;
+      }
+    });
+}
+
+export async function fetchHighscores(period: 'day' | 'week' | 'month'): Promise<HighscoreResult> {
+  const now = new Date();
+  let start: Date;
+  if (period === 'day') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'week') {
+    const day = (now.getDay() + 6) % 7;
+    start = new Date(now);
+    start.setDate(now.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  const iso = start.toISOString();
+  let { data, error } = await supabase
+    .from('sessions')
+    .select('email, username, count, date')
+    .gte('date', iso);
+  if (error) {
+    const msg = error.message || '';
+    const code = error.code;
+    if (msg.includes('email') || code === '42703') {
+      let fb = await supabase
+        .from('sessions')
+        .select('user_id, username, count, created_at')
+        .gte('created_at', iso);
+      if (fb.error && fb.error.code === '42703') {
+        fb = await supabase
+          .from('sessions')
+          .select('user_id, count, created_at')
+          .gte('created_at', iso);
+        data = fb.data?.map(r => ({ email: r.user_id, count: r.count, date: r.created_at }));
+      } else {
+        data = fb.data?.map(r => ({ email: r.user_id, username: r.username, count: r.count, date: r.created_at }));
+      }
+      error = fb.error;
+    } else if (msg.includes('username')) {
+      const fallback = await supabase
+        .from('sessions')
+        .select('email, count, date')
+        .gte('date', iso);
+      data = fallback.data;
+      error = fallback.error;
+    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
+      const fallback = await supabase
+        .from('sessions')
+        .select('email, username, count, date')
+        .gte('date', iso.split('T')[0]);
+      if (fallback.error) {
+        const fb2 = await supabase
+          .from('sessions')
+          .select('email, count, date')
+          .gte('date', iso.split('T')[0]);
+        data = fb2.data;
+        error = fb2.error;
+      } else {
+        data = fallback.data;
+        error = null;
+      }
+    }
+  }
+  if (error) throw new Error('Fehler beim Laden der Highscores');
+
+  const totals = new Map<string, { name: string; count: number }>();
+  let totalCount = 0;
+  (data || []).forEach(r => {
+    let name: string | undefined =
+      typeof r.username === 'string' && r.username.trim()
+        ? r.username.trim()
+        : undefined;
+    if (!name) {
+      const emailVal = (r.email as string) || '';
+      if (emailVal.includes('@')) {
+        name = emailVal.trim();
+      }
+    }
+    if (!name && typeof (r as Record<string, unknown>).user_id === 'string') {
+      name = (r as Record<string, unknown>).user_id as string;
+    }
+    if (!name) return;
+    const key = name.toLowerCase();
+    totalCount += r.count as number;
+    const existing = totals.get(key);
+    if (existing) existing.count += r.count as number;
+    else totals.set(key, { name, count: r.count as number });
+  });
+
+  const scores = Array.from(totals.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return { scores, total: totalCount };
+}
+
+export function computeHighscores(period: 'day' | 'week' | 'month'): HighscoreResult {
+  const sessions = loadCommunitySessions();
+  const now = new Date();
+  let start: Date;
+  if (period === 'day') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'week') {
+    const day = (now.getDay() + 6) % 7; // Monday = 0
+    start = new Date(now);
+    start.setDate(now.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  const totals = new Map<string, { name: string; count: number }>();
+  let totalCount = 0;
+  sessions.forEach(s => {
+    const d = new Date(s.date);
+    if (d >= start) {
+      let name: string | undefined =
+        typeof s.username === 'string' && s.username.trim()
+          ? s.username.trim()
+          : undefined;
+      if (!name && typeof s.email === 'string' && s.email.trim()) {
+        name = s.email.trim();
+      }
+      if (!name && (s as Record<string, unknown>).user_id) {
+        name = String((s as Record<string, unknown>).user_id);
+      }
+      if (!name) return;
+      const key = name.toLowerCase();
+      totalCount += s.count;
+      const existing = totals.get(key);
+      if (existing) existing.count += s.count;
+      else totals.set(key, { name, count: s.count });
+    }
+  });
+
+  const scores = Array.from(totals.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return { scores, total: totalCount };
+}
