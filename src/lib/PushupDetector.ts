@@ -52,17 +52,26 @@ export const UNIMPORTANT_LANDMARKS = [
   17, 18, 19, 20, 21, 22,
 ];
 
+export enum PushupState {
+  WaitingForUp,
+  Up,
+  Down,
+}
+
 export class PushupDetector {
   private pose: PoseInstance | null = null;
   private initPromise: Promise<void>;
-  private isDown = false;
+  private state: PushupState = PushupState.WaitingForUp;
   private count = 0;
   private legSeen = false;
+  private consecutiveUpFrames = 0;
+  private requiredUpFrames: number;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
-  constructor() {
+  constructor(requiredUpFrames = 5) {
+    this.requiredUpFrames = requiredUpFrames;
     this.initPromise = this.initPose();
   }
 
@@ -170,26 +179,49 @@ export class PushupDetector {
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    if (avgAngle < 100 && !this.isDown) {
-      if (legVisible) {
-        this.isDown = true;
-        this.legSeen = true;
-      }
+    const isUpFrame = avgAngle > 160 && legVisible;
+    const isDownFrame = avgAngle < 100;
+
+    if (isUpFrame) {
+      this.consecutiveUpFrames++;
+    } else {
+      this.consecutiveUpFrames = 0;
     }
 
-    if (avgAngle > 160 && this.isDown) {
-      this.isDown = false;
-      if (this.legSeen) {
-        this.count++;
+    switch (this.state) {
+      case PushupState.WaitingForUp: {
+        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
+          this.state = PushupState.Up;
+          this.consecutiveUpFrames = 0;
+        }
+        break;
       }
-      this.legSeen = false;
+      case PushupState.Up: {
+        if (isDownFrame && legVisible) {
+          this.state = PushupState.Down;
+          this.legSeen = true;
+        }
+        break;
+      }
+      case PushupState.Down: {
+        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
+          this.state = PushupState.Up;
+          if (this.legSeen) {
+            this.count++;
+          }
+          this.legSeen = false;
+          this.consecutiveUpFrames = 0;
+        }
+        break;
+      }
     }
   }
 
   reset() {
     this.count = 0;
-    this.isDown = false;
+    this.state = PushupState.WaitingForUp;
     this.legSeen = false;
+    this.consecutiveUpFrames = 0;
     this.landmarks = null;
   }
 
