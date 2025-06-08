@@ -1,299 +1,69 @@
-// Pose detection and push-up counting logic
-import type {
-  Pose,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
+private processLandmarks(landmarks: NormalizedLandmarkList) {
+  const leftShoulder = landmarks[11];
+  const leftElbow = landmarks[13];
+  const leftWrist = landmarks[15];
+  const rightShoulder = landmarks[12];
+  const rightElbow = landmarks[14];
+  const rightWrist = landmarks[16];
+  const leftHip = landmarks[23];
+  const rightHip = landmarks[24];
+  const leftKnee = landmarks[25];
+  const rightKnee = landmarks[26];
+  const leftAnkle = landmarks[27];
+  const rightAnkle = landmarks[28];
+  const leftFoot = landmarks[31];
+  const rightFoot = landmarks[32];
 
-type PoseInstance = Pose;
-
-export const POSE_LANDMARK_NAMES = [
-  'NOSE',
-  'LEFT_EYE_INNER',
-  'LEFT_EYE',
-  'LEFT_EYE_OUTER',
-  'RIGHT_EYE_INNER',
-  'RIGHT_EYE',
-  'RIGHT_EYE_OUTER',
-  'LEFT_EAR',
-  'RIGHT_EAR',
-  'MOUTH_LEFT',
-  'MOUTH_RIGHT',
-  'LEFT_SHOULDER',
-  'RIGHT_SHOULDER',
-  'LEFT_ELBOW',
-  'RIGHT_ELBOW',
-  'LEFT_WRIST',
-  'RIGHT_WRIST',
-  'LEFT_PINKY',
-  'RIGHT_PINKY',
-  'LEFT_INDEX',
-  'RIGHT_INDEX',
-  'LEFT_THUMB',
-  'RIGHT_THUMB',
-  'LEFT_HIP',
-  'RIGHT_HIP',
-  'LEFT_KNEE',
-  'RIGHT_KNEE',
-  'LEFT_ANKLE',
-  'RIGHT_ANKLE',
-  'LEFT_HEEL',
-  'RIGHT_HEEL',
-  'LEFT_FOOT_INDEX',
-  'RIGHT_FOOT_INDEX'
-];
-
-// Indices of landmarks not relevant for push-up detection (face & fingers)
-export const UNIMPORTANT_LANDMARKS = [
-  // face landmarks
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  // finger landmarks
-  17, 18, 19, 20, 21, 22,
-];
-
-export class PushupDetector {
-  private pose: PoseInstance | null = null;
-  private initPromise: Promise<void>;
-  private isDown = false;
-  private count = 0;
-  private legSeen = false;
-  // keeps a rolling window of average elbow angles
-  private angleHistory: number[] = [];
-  // keeps a rolling window of torso orientation angles
-  private torsoHistory: number[] = [];
-  private framesBelowVisibility = 0;
-  private downFrameCount = 0;
-  private upFrameCount = 0;
-  /**
-   * Size of the smoothing window used for averaging angles.
-   * Higher values give smoother results but introduce latency.
-   */
-  private static readonly ANGLE_WINDOW = 5;
-  private static readonly DOWN_THRESHOLD = 100;
-  private static readonly UP_THRESHOLD = 160;
-  /** Minimum consecutive frames an angle must stay beyond a threshold. */
-  private static readonly FRAME_COUNT_THRESHOLD = 3;
-  private static readonly LEG_VISIBILITY_THRESHOLD = 0.3;
-  /**
-   * Number of consecutive frames legs must be invisible before the frame is
-   * ignored to avoid false detections when the user leaves the frame.
-   */
-  private static readonly LEG_MISSING_FRAMES = 2;
-  private static readonly ORIENTATION_CHANGE_THRESHOLD = 15; // degrees
-  private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
-  private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
-
-  constructor() {
-    this.initPromise = this.initPose();
+  if (!leftShoulder || !leftElbow || !leftWrist || !rightShoulder || !rightElbow || !rightWrist) {
+    return;
   }
 
-  private async initPose() {
-    const mp = await import('@mediapipe/pose');
-    // The package ships as a UMD bundle which doesn't always expose the
-    // constructor via ESM exports.  Some bundlers return an empty module
-    // object on dynamic import.  Fallback to the global `Pose` if necessary.
-    const PoseCtor: typeof Pose =
-      (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
-      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
-    if (!PoseCtor) {
-      throw new Error('Failed to load Pose constructor from @mediapipe/pose');
-    }
-    this.pose = new PoseCtor({
-      locateFile: (file: string) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
+  const legVisible = [
+    leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftFoot, rightFoot
+  ].some((lm) => lm && (lm.visibility ?? 0) > PushupDetector.LEG_VISIBILITY_THRESHOLD);
 
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
+  if (!legVisible) {
+    this.framesBelowVisibility++;
+    if (this.framesBelowVisibility > PushupDetector.LEG_MISSING_FRAMES) return;
+  } else {
+    this.framesBelowVisibility = 0;
+  }
 
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-        if (this.onPoseResults) {
-          this.onPoseResults(results.poseLandmarks);
+  const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
+  const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
+  const avgAngle = (leftAngle + rightAngle) / 2;
+
+  const isUpFrame = avgAngle > 160 && legVisible;
+  const isDownFrame = avgAngle < 100;
+
+  if (isUpFrame) {
+    this.consecutiveUpFrames++;
+  } else {
+    this.consecutiveUpFrames = 0;
+  }
+
+  switch (this.state) {
+    case PushupState.WaitingForUp:
+      if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
+        this.state = PushupState.Up;
+        this.consecutiveUpFrames = 0;
+      }
+      break;
+    case PushupState.Up:
+      if (isDownFrame && legVisible) {
+        this.state = PushupState.Down;
+        this.legSeen = true;
+      }
+      break;
+    case PushupState.Down:
+      if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
+        this.state = PushupState.Up;
+        if (this.legSeen) {
+          this.count++;
         }
+        this.legSeen = false;
+        this.consecutiveUpFrames = 0;
       }
-    });
-  }
-
-  setOnPoseResults(callback: (results: PoseResults['poseLandmarks']) => void) {
-    this.onPoseResults = callback;
-  }
-
-  async detect(videoElement: HTMLVideoElement): Promise<number> {
-    await this.initPromise;
-    if (!this.pose) return this.count;
-    if (!this.isInitialized) {
-      await this.pose.send({ image: videoElement });
-      return this.count;
-    }
-
-    await this.pose.send({ image: videoElement });
-    return this.count;
-  }
-
-  private calculateAngle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
-    const ab = { x: a.x - b.x, y: a.y - b.y };
-    const cb = { x: c.x - b.x, y: c.y - b.y };
-    const dot = ab.x * cb.x + ab.y * cb.y;
-    const magAB = Math.hypot(ab.x, ab.y);
-    const magCB = Math.hypot(cb.x, cb.y);
-    const angle = Math.acos(dot / (magAB * magCB));
-    return (angle * 180) / Math.PI;
-  }
-
-  private processLandmarks(landmarks: NormalizedLandmarkList) {
-    const leftShoulder = landmarks[11];
-    const leftElbow = landmarks[13];
-    const leftWrist = landmarks[15];
-    const rightShoulder = landmarks[12];
-    const rightElbow = landmarks[14];
-    const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftKnee = landmarks[25];
-    const rightKnee = landmarks[26];
-    const leftAnkle = landmarks[27];
-    const rightAnkle = landmarks[28];
-    const leftFoot = landmarks[31];
-    const rightFoot = landmarks[32];
-
-    if (
-      !leftShoulder ||
-      !leftElbow ||
-      !leftWrist ||
-      !rightShoulder ||
-      !rightElbow ||
-      !rightWrist
-    ) {
-      return;
-    }
-
-    const legVisible = [
-      leftHip,
-      rightHip,
-      leftKnee,
-      rightKnee,
-      leftAnkle,
-      rightAnkle,
-      leftFoot,
-      rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > PushupDetector.LEG_VISIBILITY_THRESHOLD);
-
-    if (!legVisible) {
-      this.framesBelowVisibility++;
-      if (this.framesBelowVisibility > PushupDetector.LEG_MISSING_FRAMES) {
-        return;
-      }
-    } else {
-      this.framesBelowVisibility = 0;
-    }
-
-    const shoulderMid = {
-      x: (leftShoulder.x + rightShoulder.x) / 2,
-      y: (leftShoulder.y + rightShoulder.y) / 2
-    };
-    const hipMid = {
-      x: (leftHip.x + rightHip.x) / 2,
-      y: (leftHip.y + rightHip.y) / 2
-    };
-    const torsoAngle =
-      (Math.atan2(hipMid.y - shoulderMid.y, hipMid.x - shoulderMid.x) * 180) /
-      Math.PI;
-
-    const prevOrientation = this.torsoHistory[this.torsoHistory.length - 1];
-    if (
-      prevOrientation !== undefined &&
-      Math.abs(torsoAngle - prevOrientation) >
-        PushupDetector.ORIENTATION_CHANGE_THRESHOLD
-    ) {
-      return;
-    }
-
-    this.torsoHistory.push(torsoAngle);
-    if (this.torsoHistory.length > PushupDetector.ANGLE_WINDOW) {
-      this.torsoHistory.shift();
-    }
-
-    const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
-    const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
-    const avgAngle = (leftAngle + rightAngle) / 2;
-
-    this.angleHistory.push(avgAngle);
-    if (this.angleHistory.length > PushupDetector.ANGLE_WINDOW) {
-      this.angleHistory.shift();
-    }
-
-    const smoothAngle =
-      this.angleHistory.reduce((s, v) => s + v, 0) / this.angleHistory.length;
-
-    if (smoothAngle < PushupDetector.DOWN_THRESHOLD) {
-      this.downFrameCount++;
-    } else {
-      this.downFrameCount = 0;
-    }
-
-    if (smoothAngle > PushupDetector.UP_THRESHOLD) {
-      this.upFrameCount++;
-    } else {
-      this.upFrameCount = 0;
-    }
-
-    if (
-      this.downFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
-      !this.isDown &&
-      legVisible
-    ) {
-      this.isDown = true;
-      this.legSeen = true;
-    }
-
-    if (
-      this.upFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
-      this.isDown
-    ) {
-      this.isDown = false;
-      if (this.legSeen) {
-        this.count++;
-      }
-      this.legSeen = false;
-    }
-  }
-
-  reset() {
-    this.count = 0;
-    this.isDown = false;
-    this.legSeen = false;
-    this.landmarks = null;
-  }
-
-  getCount() {
-    return this.count;
-  }
-
-  getLandmarks() {
-    return this.landmarks;
-  }
-
-  isReady() {
-    return this.isInitialized;
-  }
-
-  cleanup() {
-    if (this.pose) {
-      this.pose.reset();
-    }
+      break;
   }
 }
-
-export type { PoseResults };
-

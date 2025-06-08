@@ -45,11 +45,6 @@ import {
 } from '@/lib/PushupDetector';
 import { SquatDetector } from '@/lib/SquatDetector';
 import { supabase } from '@/lib/supabaseClient';
-import {
-  PushupDetector,
-  POSE_LANDMARK_NAMES,
-  UNIMPORTANT_LANDMARKS
-} from '@/lib/PushupDetector';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
