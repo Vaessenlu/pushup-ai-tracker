@@ -163,51 +163,80 @@ export async function fetchHighscores(
   }
 
   const iso = start.toISOString();
+  let exerciseAvailable = true;
   let { data, error } = await supabase
     .from('sessions')
     .select('email, username, count, date, exercise')
     .eq('exercise', exercise)
     .gte('date', iso);
+  if (error && (error.message?.includes('exercise') || error.code === '42703')) {
+    exerciseAvailable = false;
+    const res = await supabase
+      .from('sessions')
+      .select('email, username, count, date')
+      .gte('date', iso);
+    data = res.data || null;
+    error = res.error;
+  }
   if (error) {
     const msg = error.message || '';
     const code = error.code;
     if (msg.includes('email') || code === '42703') {
-      let fb = await supabase
+      let fbQuery = supabase
         .from('sessions')
-        .select('user_id, username, count, created_at, exercise')
-        .eq('exercise', exercise)
+        .select(
+          exerciseAvailable
+            ? 'user_id, username, count, created_at, exercise'
+            : 'user_id, username, count, created_at'
+        )
         .gte('created_at', iso);
+      if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
+      let fb = await fbQuery;
       if (fb.error && fb.error.code === '42703') {
-        fb = await supabase
+        fbQuery = supabase
           .from('sessions')
-          .select('user_id, count, created_at, exercise')
-          .eq('exercise', exercise)
+          .select(
+            exerciseAvailable
+              ? 'user_id, count, created_at, exercise'
+              : 'user_id, count, created_at'
+          )
           .gte('created_at', iso);
+        if (exerciseAvailable) fbQuery = fbQuery.eq('exercise', exercise);
+        fb = await fbQuery;
         data = fb.data?.map(r => ({ user_id: r.user_id, count: r.count, date: r.created_at }));
       } else {
         data = fb.data?.map(r => ({ user_id: r.user_id, username: r.username, count: r.count, date: r.created_at }));
       }
       error = fb.error;
     } else if (msg.includes('username')) {
-      const fallback = await supabase
+      let fallbackQuery = supabase
         .from('sessions')
-        .select('email, count, date, exercise')
-        .eq('exercise', exercise)
+        .select(
+          exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date'
+        )
         .gte('date', iso);
+      if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
+      const fallback = await fallbackQuery;
       data = fallback.data;
       error = fallback.error;
     } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-      const fallback = await supabase
+      let fallbackQuery = supabase
         .from('sessions')
-        .select('email, username, count, date, exercise')
-        .eq('exercise', exercise)
+        .select(
+          exerciseAvailable
+            ? 'email, username, count, date, exercise'
+            : 'email, username, count, date'
+        )
         .gte('date', iso.split('T')[0]);
+      if (exerciseAvailable) fallbackQuery = fallbackQuery.eq('exercise', exercise);
+      let fallback = await fallbackQuery;
       if (fallback.error) {
-        const fb2 = await supabase
+        let fb2Query = supabase
           .from('sessions')
-          .select('email, count, date, exercise')
-          .eq('exercise', exercise)
+          .select(exerciseAvailable ? 'email, count, date, exercise' : 'email, count, date')
           .gte('date', iso.split('T')[0]);
+        if (exerciseAvailable) fb2Query = fb2Query.eq('exercise', exercise);
+        const fb2 = await fb2Query;
         data = fb2.data;
         error = fb2.error;
       } else {
