@@ -88,10 +88,12 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       id: Date.now().toString(),
     };
     if (user) {
+      const meta = user.user_metadata as { username?: string };
+      const username = communityUsername || meta.username;
       try {
         const { data } = await supabase
           .from('sessions')
-          .insert({ user_id: user.id, count: session.count, duration: session.duration, exercise: session.exercise })
+          .insert({ user_id: user.id, count: session.count, duration: session.duration, exercise: session.exercise, username })
           .select('id')
           .single();
         if (data?.id) {
@@ -103,7 +105,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           try {
             const { data } = await supabase
               .from('sessions')
-              .insert({ user_id: user.id, count: session.count, duration: session.duration })
+              .insert({ user_id: user.id, count: session.count, duration: session.duration, username })
               .select('id')
               .single();
             if (data?.id) newSession = { ...newSession, id: data.id };
