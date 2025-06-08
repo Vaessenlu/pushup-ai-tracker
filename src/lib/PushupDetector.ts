@@ -58,6 +58,29 @@ export class PushupDetector {
   private isDown = false;
   private count = 0;
   private legSeen = false;
+  // keeps a rolling window of average elbow angles
+  private angleHistory: number[] = [];
+  // keeps a rolling window of torso orientation angles
+  private torsoHistory: number[] = [];
+  private framesBelowVisibility = 0;
+  private downFrameCount = 0;
+  private upFrameCount = 0;
+  /**
+   * Size of the smoothing window used for averaging angles.
+   * Higher values give smoother results but introduce latency.
+   */
+  private static readonly ANGLE_WINDOW = 5;
+  private static readonly DOWN_THRESHOLD = 100;
+  private static readonly UP_THRESHOLD = 160;
+  /** Minimum consecutive frames an angle must stay beyond a threshold. */
+  private static readonly FRAME_COUNT_THRESHOLD = 3;
+  private static readonly LEG_VISIBILITY_THRESHOLD = 0.3;
+  /**
+   * Number of consecutive frames legs must be invisible before the frame is
+   * ignored to avoid false detections when the user leaves the frame.
+   */
+  private static readonly LEG_MISSING_FRAMES = 2;
+  private static readonly ORIENTATION_CHANGE_THRESHOLD = 15; // degrees
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
@@ -164,20 +187,80 @@ export class PushupDetector {
       rightAnkle,
       leftFoot,
       rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > 0.3);
+    ].some((lm) => lm && (lm.visibility ?? 0) > PushupDetector.LEG_VISIBILITY_THRESHOLD);
+
+    if (!legVisible) {
+      this.framesBelowVisibility++;
+      if (this.framesBelowVisibility > PushupDetector.LEG_MISSING_FRAMES) {
+        return;
+      }
+    } else {
+      this.framesBelowVisibility = 0;
+    }
+
+    const shoulderMid = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2
+    };
+    const hipMid = {
+      x: (leftHip.x + rightHip.x) / 2,
+      y: (leftHip.y + rightHip.y) / 2
+    };
+    const torsoAngle =
+      (Math.atan2(hipMid.y - shoulderMid.y, hipMid.x - shoulderMid.x) * 180) /
+      Math.PI;
+
+    const prevOrientation = this.torsoHistory[this.torsoHistory.length - 1];
+    if (
+      prevOrientation !== undefined &&
+      Math.abs(torsoAngle - prevOrientation) >
+        PushupDetector.ORIENTATION_CHANGE_THRESHOLD
+    ) {
+      return;
+    }
+
+    this.torsoHistory.push(torsoAngle);
+    if (this.torsoHistory.length > PushupDetector.ANGLE_WINDOW) {
+      this.torsoHistory.shift();
+    }
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    if (avgAngle < 100 && !this.isDown) {
-      if (legVisible) {
-        this.isDown = true;
-        this.legSeen = true;
-      }
+    this.angleHistory.push(avgAngle);
+    if (this.angleHistory.length > PushupDetector.ANGLE_WINDOW) {
+      this.angleHistory.shift();
     }
 
-    if (avgAngle > 160 && this.isDown) {
+    const smoothAngle =
+      this.angleHistory.reduce((s, v) => s + v, 0) / this.angleHistory.length;
+
+    if (smoothAngle < PushupDetector.DOWN_THRESHOLD) {
+      this.downFrameCount++;
+    } else {
+      this.downFrameCount = 0;
+    }
+
+    if (smoothAngle > PushupDetector.UP_THRESHOLD) {
+      this.upFrameCount++;
+    } else {
+      this.upFrameCount = 0;
+    }
+
+    if (
+      this.downFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
+      !this.isDown &&
+      legVisible
+    ) {
+      this.isDown = true;
+      this.legSeen = true;
+    }
+
+    if (
+      this.upFrameCount >= PushupDetector.FRAME_COUNT_THRESHOLD &&
+      this.isDown
+    ) {
       this.isDown = false;
       if (this.legSeen) {
         this.count++;
