@@ -49,11 +49,20 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         setSessions([]);
         return;
       }
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('sessions')
         .select('id, count, duration, created_at, exercise')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      if (error && (error.message?.includes('exercise') || error.code === '42703')) {
+        const res = await supabase
+          .from('sessions')
+          .select('id, count, duration, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      }
       if (data) {
         setSessions(
           data.map((s) => ({
