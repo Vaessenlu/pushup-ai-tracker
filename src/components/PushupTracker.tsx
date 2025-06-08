@@ -43,6 +43,7 @@ import {
   POSE_LANDMARK_NAMES,
   UNIMPORTANT_LANDMARKS
 } from '@/lib/PushupDetector';
+import { SquatDetector } from '@/lib/SquatDetector';
 import { supabase } from '@/lib/supabaseClient';
 import {
   PushupDetector,
@@ -67,6 +68,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<PushupDetector | null>(null);
+  const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>(0);
 
@@ -74,6 +76,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [status, setStatus] = useState<'ready' | 'tracking' | 'paused'>('ready');
   const [videoReady, setVideoReady] = useState(false);
   const [count, setCount] = useState(0);
+  const [squatCount, setSquatCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
   const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
@@ -104,6 +107,13 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     return () => {
       detector.cleanup();
     };
+  }, []);
+
+  // Initialize squat detector
+  useEffect(() => {
+    const detector = new SquatDetector();
+    squatDetectorRef.current = detector;
+    return () => detector.cleanup();
   }, []);
 
   // Handle video metadata loaded
@@ -249,7 +259,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
 
     detectorRef.current?.reset();
+    squatDetectorRef.current?.reset();
     setCount(0);
+    setSquatCount(0);
     setSessionTime(0);
     startTimeRef.current = Date.now();
     setIsTracking(true);
@@ -269,16 +281,27 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const stopTracking = useCallback(async () => {
     const endTime = Date.now();
     const duration = Math.round((endTime - startTimeRef.current) / 1000);
-    const avgTimePerRep = count > 0 ? duration / count : 0;
+    const avgTimePerRepPushup = count > 0 ? duration / count : 0;
+    const avgTimePerRepSquat = squatCount > 0 ? duration / squatCount : 0;
 
     if (count > 0) {
       if (user?.id) {
         try {
-          await supabase.from('sessions').insert({
-            user_id: user.id,
-            count,
-            duration,
-          });
+          await supabase
+            .from('sessions')
+            .insert({ user_id: user.id, count, duration, exercise: 'pushup' })
+            .catch(async (e) => {
+              const msg = (e as { message?: string }).message || '';
+              if (msg.includes('exercise')) {
+                await supabase.from('sessions').insert({
+                  user_id: user.id,
+                  count,
+                  duration,
+                });
+              } else {
+                throw e;
+              }
+            });
         } catch (e) {
           console.error('Supabase insert failed', e);
         }
@@ -288,7 +311,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         date: new Date(),
         count,
         duration,
-        avgTimePerRep,
+        avgTimePerRep: avgTimePerRepPushup,
+        exercise: 'pushup',
       });
 
       toast({
@@ -297,20 +321,60 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       });
     }
 
+    if (squatCount > 0) {
+      if (user?.id) {
+        try {
+          await supabase
+            .from('sessions')
+            .insert({ user_id: user.id, count: squatCount, duration, exercise: 'squat' })
+            .catch(async (e) => {
+              const msg = (e as { message?: string }).message || '';
+              if (msg.includes('exercise')) {
+                await supabase.from('sessions').insert({
+                  user_id: user.id,
+                  count: squatCount,
+                  duration,
+                });
+              } else {
+                throw e;
+              }
+            });
+        } catch (e) {
+          console.error('Supabase insert failed', e);
+        }
+      }
+
+      onSessionComplete({
+        date: new Date(),
+        count: squatCount,
+        duration,
+        avgTimePerRep: avgTimePerRepSquat,
+        exercise: 'squat',
+      });
+
+      toast({
+        title: 'Session beendet!',
+        description: `${squatCount} Kniebeugen in ${duration}s absolviert!`,
+      });
+    }
+
     setIsTracking(false);
     setStatus('ready');
     setCount(0);
+    setSquatCount(0);
     setSessionTime(0);
-  }, [count, onSessionComplete, setIsTracking, toast, user]);
+  }, [count, squatCount, onSessionComplete, setIsTracking, toast, user]);
 
   // Animation loop for pose detection
   useEffect(() => {
     if (cameraEnabled && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
-        if (videoRef.current && detectorRef.current) {
+        if (videoRef.current && detectorRef.current && squatDetectorRef.current) {
           const newCount = await detectorRef.current.detect(videoRef.current);
+          const newSquat = await squatDetectorRef.current.detect(videoRef.current);
           if (isTracking) {
             setCount(newCount);
+            setSquatCount(newSquat);
 
             // Update session time only while tracking
             const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
@@ -433,6 +497,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       detectorRef.current?.cleanup();
+      squatDetectorRef.current?.cleanup();
     };
   }, []);
 
@@ -493,9 +558,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                 </div>
                 
                 {/* Count Display */}
-                <div className="absolute top-4 right-4">
-                  <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-3 rounded-full">
-                    <span className="text-3xl font-bold">{count}</span>
+                <div className="absolute top-4 right-4 space-y-2 text-right">
+                  <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-1 rounded-full">
+                    <span className="text-lg font-bold">{count} Pushups</span>
+                  </div>
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-1 rounded-full">
+                    <span className="text-lg font-bold">{squatCount} Squats</span>
                   </div>
                 </div>
               </>

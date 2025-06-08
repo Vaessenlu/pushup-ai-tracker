@@ -60,7 +60,7 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ sessions }) => {
             <Trophy className="h-6 w-6" />
             <div>
               <p className="text-green-100 text-sm">Beste Session</p>
-              <p className="text-xl font-bold">{bestSession} Liegestützen</p>
+              <p className="text-xl font-bold">{bestSession} Wiederholungen</p>
             </div>
           </div>
         </Card>
@@ -101,7 +101,10 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ sessions }) => {
                   {/* Session Details */}
                   <div className="flex-grow">
                     <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-lg font-semibold">{session.count} Liegestützen</h3>
+                      <h3 className="text-lg font-semibold">
+                        {session.count}{' '}
+                        {session.exercise === 'pushup' ? 'Liegestützen' : 'Kniebeugen'}
+                      </h3>
                       {isPersonalRecord && (
                         <Badge className="bg-yellow-500 hover:bg-yellow-600">
                           <Trophy className="h-3 w-3 mr-1" />
