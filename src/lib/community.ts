@@ -133,72 +133,36 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select(
-      'user_id, username, count, created_at, exercise, auth_users!inner(username,email)'
-    )
+    .select('user_id, username, count, created_at, exercise')
     .gte('created_at', iso)
     .eq('exercise', exercise);
 
   if (error && (error.message?.includes('exercise') || error.code === '42703')) {
     const res = await supabase
       .from('sessions')
-      .select(
-        'user_id, username, count, created_at, auth_users!inner(username,email)'
-      )
+      .select('user_id, username, count, created_at')
       .gte('created_at', iso);
     data = res.data || null;
     error = res.error;
-  }
-
-  if (error && (error.message?.includes('created_at') || error.code === '42703')) {
-    const res = await supabase
-      .from('sessions')
-      .select(
-        'user_id, username, count, date, auth_users!inner(username,email)'
-      )
-      .eq('exercise', exercise)
-      .gte('date', iso.split('T')[0]);
-    data = res.data || null;
-    error = res.error;
-    if (error && (error.message?.includes('date') || error.code === '42703')) {
-      const fb = await supabase
-        .from('sessions')
-        .select('user_id, username, count, date, auth_users!inner(username,email)')
-        .gte('date', iso.split('T')[0]);
-      data = fb.data || null;
-      error = fb.error;
-    }
   }
   if (error) {
     console.warn('Falling back to local highscores', error.message);
     return computeHighscores(period, exercise);
   }
 
-  const totals = new Map<string, { name: string; count: number }>();
-  let total = 0;
-  (data || []).forEach((r: {
-    user_id: string;
-    username?: string | null;
-    count: number;
-    created_at: string;
-    exercise?: string | null;
-    auth_users?: { username?: string | null; email?: string | null };
-  }) => {
-    let name: string | undefined = r.username || undefined;
-    if (!name) name = r.auth_users?.username || r.auth_users?.email || undefined;
-    if (!name) name = r.user_id as string;
-    if (!name) return;
-    total += r.count as number;
-    const key = name.toLowerCase();
-    const existing = totals.get(key);
-    if (existing) existing.count += r.count as number;
-    else totals.set(key, { name, count: r.count as number });
-  });
-
-  const scores = Array.from(totals.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
-  return { scores, total };
+  const sessions: CommunitySession[] = (data || []).map(r => ({
+    email: '',
+    username: (r as { username?: string | null }).username || undefined,
+    user_id: (r as { user_id?: string | null }).user_id || undefined,
+    date: (r as { created_at: string }).created_at,
+    count: (r as { count: number }).count,
+    exercise: (r as { exercise?: string | null }).exercise as
+      | 'pushup'
+      | 'squat'
+      | undefined,
+  }));
+  sessions.forEach(saveCommunitySession);
+  return computeHighscoresFromSessions(sessions, period, exercise);
 }
 
 
@@ -207,6 +171,14 @@ export function computeHighscores(
   exercise: 'pushup' | 'squat' = 'pushup'
 ): HighscoreResult {
   const sessions = loadCommunitySessions();
+  return computeHighscoresFromSessions(sessions, period, exercise);
+}
+
+export function computeHighscoresFromSessions(
+  sessions: CommunitySession[],
+  period: 'day' | 'week' | 'month',
+  exercise: 'pushup' | 'squat' = 'pushup',
+): HighscoreResult {
   const now = new Date();
   let start: Date;
   if (period === 'day') {
