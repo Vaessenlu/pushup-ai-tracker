@@ -66,6 +66,9 @@ export async function saveSessionServer(
   session: Omit<CommunitySession, 'email' | 'username'>,
   providedUsername?: string,
 ) {
+  if (token) {
+    await supabase.auth.setSession({ access_token: token, refresh_token: token });
+  }
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
 
@@ -177,7 +180,9 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select('user_id, username, count, created_at, exercise')
+    .select(
+      'user_id, username, count, created_at, exercise, auth_users!inner(username,email)'
+    )
     .gte('created_at', iso)
     .eq('exercise', exercise);
   if (error && (error.message?.includes('exercise') || error.code === '42703')) {
@@ -195,8 +200,19 @@ export async function fetchHighscores(
 
   const totals = new Map<string, { name: string; count: number }>();
   let total = 0;
-  (data || []).forEach(r => {
-    const name = (r.username as string) || (r.user_id as string);
+  (data || []).forEach((r: {
+    user_id: string;
+    username?: string | null;
+    count: number;
+    created_at: string;
+    exercise?: string | null;
+    auth_users?: { username?: string | null; email?: string | null } | null;
+  }) => {
+    let name: string | undefined = r.username || undefined;
+    if (!name && r.auth_users) {
+      name = r.auth_users.username || r.auth_users.email || undefined;
+    }
+    if (!name) name = r.user_id as string;
     if (!name) return;
     total += r.count as number;
     const key = name.toLowerCase();
