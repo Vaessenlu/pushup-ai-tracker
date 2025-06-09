@@ -135,16 +135,41 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select('user_id, username, count, created_at, exercise')
+    .select(
+      'user_id, username, count, created_at, exercise, auth_users!inner(username,email)'
+    )
     .gte('created_at', iso)
     .eq('exercise', exercise);
+
   if (error && (error.message?.includes('exercise') || error.code === '42703')) {
     const res = await supabase
       .from('sessions')
-      .select('user_id, username, count, created_at')
+      .select(
+        'user_id, username, count, created_at, auth_users!inner(username,email)'
+      )
       .gte('created_at', iso);
     data = res.data || null;
     error = res.error;
+  }
+
+  if (error && (error.message?.includes('created_at') || error.code === '42703')) {
+    const res = await supabase
+      .from('sessions')
+      .select(
+        'user_id, username, count, date, auth_users!inner(username,email)'
+      )
+      .eq('exercise', exercise)
+      .gte('date', iso.split('T')[0]);
+    data = res.data || null;
+    error = res.error;
+    if (error && (error.message?.includes('date') || error.code === '42703')) {
+      const fb = await supabase
+        .from('sessions')
+        .select('user_id, username, count, date, auth_users!inner(username,email)')
+        .gte('date', iso.split('T')[0]);
+      data = fb.data || null;
+      error = fb.error;
+    }
   }
   if (error) {
     console.warn('Falling back to local highscores', error.message);
