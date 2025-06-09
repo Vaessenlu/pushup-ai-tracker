@@ -161,7 +161,54 @@ export async function fetchHighscores(
   period: 'day' | 'week' | 'month',
   exercise: 'pushup' | 'squat' = 'pushup',
 ): Promise<HighscoreResult> {
-  return Promise.resolve(computeHighscores(period, exercise));
+  const now = new Date();
+  let start: Date;
+  if (period === 'day') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'week') {
+    const day = (now.getDay() + 6) % 7;
+    start = new Date(now);
+    start.setDate(now.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  const iso = start.toISOString();
+  let { data, error } = await supabase
+    .from('sessions')
+    .select('user_id, username, count, created_at, exercise')
+    .gte('created_at', iso)
+    .eq('exercise', exercise);
+  if (error && (error.message?.includes('exercise') || error.code === '42703')) {
+    const res = await supabase
+      .from('sessions')
+      .select('user_id, username, count, created_at')
+      .gte('created_at', iso);
+    data = res.data || null;
+    error = res.error;
+  }
+  if (error) {
+    console.warn('Falling back to local highscores', error.message);
+    return computeHighscores(period, exercise);
+  }
+
+  const totals = new Map<string, { name: string; count: number }>();
+  let total = 0;
+  (data || []).forEach(r => {
+    const name = (r.username as string) || (r.user_id as string);
+    if (!name) return;
+    total += r.count as number;
+    const key = name.toLowerCase();
+    const existing = totals.get(key);
+    if (existing) existing.count += r.count as number;
+    else totals.set(key, { name, count: r.count as number });
+  });
+
+  const scores = Array.from(totals.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+  return { scores, total };
 }
 
 
