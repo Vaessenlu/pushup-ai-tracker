@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/Login";
+import Account from "./pages/Account";
 import { supabase } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
 
@@ -33,6 +34,7 @@ const App = () => {
           path="/login"
           element={<LoginPage onAuth={() => supabase.auth.getUser().then(({ data }) => setUser(data.user))} />}
         />
+        <Route path="/account" element={<Account />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

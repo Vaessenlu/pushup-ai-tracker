@@ -160,11 +160,16 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-pink-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 gap-2">
           {user ? (
-            <Button variant="outline" onClick={() => supabase.auth.signOut()}>
-              Logout
-            </Button>
+            <>
+              <Link to="/account">
+                <Button variant="outline">Account</Button>
+              </Link>
+              <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+                Logout
+              </Button>
+            </>
           ) : (
             <Link to="/login">
               <Button variant="outline">Login / Registrieren</Button>

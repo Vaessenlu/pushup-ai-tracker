@@ -43,14 +43,12 @@ export async function register(
   password: string,
   username: string,
 ): Promise<string> {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { username } },
-  });
+  const { data, error } = await supabase.auth.signUp({ email, password });
   if (error || !data.session) {
     throw new Error('Registrierung fehlgeschlagen');
   }
+  const { error: upd } = await supabase.auth.updateUser({ data: { username } });
+  if (upd) console.warn('Username speichern fehlgeschlagen', upd.message);
   return data.session.access_token;
 }
 
@@ -184,8 +182,10 @@ export async function fetchHighscores(
     count: number;
     created_at: string;
     exercise?: string | null;
+    auth_users?: { username?: string | null; email?: string | null };
   }) => {
     let name: string | undefined = r.username || undefined;
+    if (!name) name = r.auth_users?.username || r.auth_users?.email || undefined;
     if (!name) name = r.user_id as string;
     if (!name) return;
     total += r.count as number;
