@@ -4,6 +4,7 @@ export interface CommunitySession {
   user_id?: string;
   date: string; // ISO string
   count: number;
+  exercise?: 'pushup' | 'squat';
 }
 
 const STORAGE_KEY = 'communitySessions';
@@ -79,81 +80,35 @@ export async function saveSessionServer(
   const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
-  // Also store locally so highscores include this session
+  // Store locally so highscores include this session
   saveCommunitySession({
     email: email || '',
     username: username || undefined,
     user_id: userId,
     date: session.date,
     count: session.count,
+    exercise: session.exercise,
   });
 
+  const insertData: Record<string, unknown> = {
+    user_id: userId,
+    username,
+    created_at: session.date,
+    count: session.count,
+  };
+  if (session.exercise) insertData.exercise = session.exercise;
+
   try {
-    await supabase
-      .from('sessions')
-      .insert({ email, username, date: session.date, count: session.count })
-      .throwOnError();
+    await supabase.from('sessions').insert(insertData).throwOnError();
   } catch (err) {
     const msg = (err as { message?: string }).message || '';
-    const code = (err as { code?: string }).code;
-    if (msg.includes('username')) {
-      await supabase
-        .from('sessions')
-        .insert({ email, date: session.date, count: session.count })
-        .throwOnError();
-    } else if (msg.includes('email') || code === '42703') {
-      try {
-        await supabase
-          .from('sessions')
-          .insert({ user_id: userId, username, created_at: session.date, count: session.count })
-          .throwOnError();
-      } catch (e2) {
-        const msg2 = (e2 as { message?: string }).message || '';
-        if (msg2.includes('username')) {
-          await supabase
-            .from('sessions')
-            .insert({ user_id: userId, created_at: session.date, count: session.count })
-            .throwOnError();
-        } else {
-          throw e2;
-        }
-      }
-    } else if (code?.startsWith('22') || /timestamp|date/i.test(msg)) {
-      const onlyDate = session.date.split('T')[0];
-      try {
-        await supabase
-          .from('sessions')
-          .insert({ email, username, date: onlyDate, count: session.count })
-          .throwOnError();
-      } catch (e2) {
-        const msg2 = (e2 as { message?: string }).message || '';
-        const code2 = (e2 as { code?: string }).code;
-        if (msg2.includes('username')) {
-          await supabase
-            .from('sessions')
-            .insert({ email, date: onlyDate, count: session.count })
-            .throwOnError();
-        } else if (msg2.includes('email') || code2 === '42703') {
-          try {
-            await supabase
-              .from('sessions')
-              .insert({ user_id: userId, username, created_at: onlyDate, count: session.count })
-              .throwOnError();
-          } catch (e3) {
-            const msg3 = (e3 as { message?: string }).message || '';
-            if (msg3.includes('username')) {
-              await supabase
-                .from('sessions')
-                .insert({ user_id: userId, created_at: onlyDate, count: session.count })
-                .throwOnError();
-            } else {
-              throw e3;
-            }
-          }
-        } else {
-          throw e2;
-        }
-      }
+    if (msg.includes('created_at')) {
+      const fallback = { ...insertData, date: insertData.created_at };
+      delete fallback.created_at;
+      await supabase.from('sessions').insert(fallback).throwOnError();
+    } else if (msg.includes('exercise') || (err as { code?: string }).code === '42703') {
+      const { exercise, ...noExercise } = insertData;
+      await supabase.from('sessions').insert(noExercise).throwOnError();
     } else {
       throw err;
     }
@@ -180,9 +135,7 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select(
-      'user_id, username, count, created_at, exercise, auth_users!inner(username,email)'
-    )
+    .select('user_id, username, count, created_at, exercise')
     .gte('created_at', iso)
     .eq('exercise', exercise);
   if (error && (error.message?.includes('exercise') || error.code === '42703')) {
@@ -206,12 +159,8 @@ export async function fetchHighscores(
     count: number;
     created_at: string;
     exercise?: string | null;
-    auth_users?: { username?: string | null; email?: string | null } | null;
   }) => {
     let name: string | undefined = r.username || undefined;
-    if (!name && r.auth_users) {
-      name = r.auth_users.username || r.auth_users.email || undefined;
-    }
     if (!name) name = r.user_id as string;
     if (!name) return;
     total += r.count as number;
@@ -252,15 +201,12 @@ export function computeHighscores(
   sessions.forEach(s => {
     const d = new Date(s.date);
     if (d >= start) {
-      if ((s as Record<string, unknown>).exercise && (s as Record<string, unknown>).exercise !== exercise) {
+      if (s.exercise && s.exercise !== exercise) {
         return;
       }
-      const id = (s as Record<string, unknown>).user_id as string | undefined;
-      let name: string | undefined =
-        typeof s.username === 'string' && s.username.trim()
-          ? s.username.trim()
-          : undefined;
-      if (!name && typeof s.email === 'string' && s.email.trim()) {
+      const id = s.user_id;
+      let name: string | undefined = s.username?.trim();
+      if (!name && s.email?.trim()) {
         name = s.email.trim();
       }
       if (name && id) idToName.set(id, name);

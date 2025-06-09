@@ -133,6 +133,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         {
           date: new Date().toISOString(),
           count: newSession.count,
+          exercise: newSession.exercise,
         },
         communityUsername || undefined,
       );
@@ -142,6 +143,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         username: communityUsername || undefined,
         date: new Date().toISOString(),
         count: newSession.count,
+        exercise: newSession.exercise,
       });
     }
 
