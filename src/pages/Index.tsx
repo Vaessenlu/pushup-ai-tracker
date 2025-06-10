@@ -7,6 +7,13 @@ import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+} from '@/components/ui/carousel';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
 import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
@@ -305,16 +312,24 @@ const Index: React.FC<IndexProps> = ({ user }) => {
             <SessionHistory sessions={sessions} />
           </TabsContent>
           <TabsContent value="community">
-            <div className="grid md:grid-cols-2 gap-4">
-              <Community
-                refreshTrigger={highscoreTrigger}
-                exercise="pushup"
-              />
-              <Community
-                refreshTrigger={highscoreTrigger}
-                exercise="squat"
-              />
-            </div>
+            <Carousel className="w-full">
+              <CarouselContent>
+                <CarouselItem className="basis-full">
+                  <Community
+                    refreshTrigger={highscoreTrigger}
+                    exercise="pushup"
+                  />
+                </CarouselItem>
+                <CarouselItem className="basis-full">
+                  <Community
+                    refreshTrigger={highscoreTrigger}
+                    exercise="squat"
+                  />
+                </CarouselItem>
+              </CarouselContent>
+              <CarouselPrevious />
+              <CarouselNext />
+            </Carousel>
           </TabsContent>
         </Tabs>
       </div>

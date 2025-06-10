@@ -32,13 +32,21 @@ export interface AuthTokens {
 }
 
 export async function isUsernameTaken(username: string): Promise<boolean> {
+  const trimmed = username.trim();
   const { data, error } = await supabase
     .from('sessions')
-    .select('id')
-    .ilike('username', username.trim())
+    .select('username')
+    .ilike('username', trimmed)
     .limit(1);
   if (error) return false;
-  return (data?.length ?? 0) > 0;
+  return (
+    (data?.length ?? 0) > 0 &&
+    data.some(
+      r =>
+        typeof r.username === 'string' &&
+        r.username.trim().toLowerCase() === trimmed.toLowerCase(),
+    )
+  );
 }
 
 export async function saveSessionServer(
@@ -152,7 +160,8 @@ export async function login(
 }
 
 export async function fetchHighscores(
-  period: 'day' | 'week' | 'month'
+  period: 'day' | 'week' | 'month',
+  exercise?: 'pushup' | 'squat'
 ): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
@@ -169,10 +178,12 @@ export async function fetchHighscores(
   }
 
   const iso = start.toISOString();
-  let { data, error } = await supabase
+  let query = supabase
     .from('sessions')
-    .select('user_id, username, count, created_at')
+    .select('user_id, username, count, created_at, exercise')
     .gte('created_at', iso);
+  if (exercise) query = query.eq('exercise', exercise);
+  let { data, error } = await query;
 
   if (error) {
     const msg = error.message || '';
@@ -180,10 +191,12 @@ export async function fetchHighscores(
 
     // Fallback: wenn Spalte fehlt oder Query-Fehler
     if (msg.includes('username') || msg.includes('created_at') || code === '42703') {
-      const fallback = await supabase
+      let fallbackQuery = supabase
         .from('sessions')
         .select('user_id, count, created_at')
         .gte('created_at', iso);
+      if (exercise) fallbackQuery = fallbackQuery.eq('exercise', exercise);
+      const fallback = await fallbackQuery;
       data = fallback.data;
       error = fallback.error;
     }
