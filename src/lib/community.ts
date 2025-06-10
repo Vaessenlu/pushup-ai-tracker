@@ -31,6 +31,16 @@ export interface AuthTokens {
   refresh_token: string;
 }
 
+export async function isUsernameTaken(username: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id')
+    .ilike('username', username.trim())
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}
+
 export async function saveSessionServer(
   tokens: AuthTokens,
   session: Omit<CommunitySession, 'email' | 'username'>,
@@ -50,6 +60,9 @@ export async function saveSessionServer(
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
   if (providedUsername && providedUsername !== metaUsername) {
+    if (await isUsernameTaken(providedUsername)) {
+      throw new Error('Benutzername bereits vergeben');
+    }
     await supabase.auth.updateUser({ data: { username: providedUsername } });
   }
 
@@ -107,6 +120,9 @@ export async function register(
   password: string,
   username: string,
 ): Promise<AuthTokens> {
+  if (await isUsernameTaken(username)) {
+    throw new Error('Benutzername bereits vergeben');
+  }
   const { data, error } = await supabase.auth.signUp({
     email,
     password,

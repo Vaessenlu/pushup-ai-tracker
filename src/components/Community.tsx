@@ -6,6 +6,7 @@ import {
   fetchHighscores,
   register,
   login,
+  isUsernameTaken,
   ScoreEntry,
   HighscoreResult,
 } from '@/lib/community';
@@ -157,6 +158,10 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
                       }
                       try {
                         await supabase.auth.setSession(pendingToken);
+                        if (await isUsernameTaken(loginUsername)) {
+                          setError('Benutzername bereits vergeben');
+                          return;
+                        }
                         await supabase.auth.updateUser({ data: { username: loginUsername } });
                         setToken(pendingToken);
                         onAuth(pendingEmail, pendingToken, loginUsername);
@@ -195,6 +200,10 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
                 onClick={async () => {
                   if (regEmail && regPassword && regUsername) {
                     try {
+                      if (await isUsernameTaken(regUsername)) {
+                        setError('Benutzername bereits vergeben');
+                        return;
+                      }
                       const t = await register(regEmail, regPassword, regUsername);
                       setToken(t);
                       onAuth(regEmail, t, regUsername);
