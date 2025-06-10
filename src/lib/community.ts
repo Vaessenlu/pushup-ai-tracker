@@ -1,3 +1,106 @@
+import { supabase } from './supabaseClient';
+
+export interface CommunitySession {
+  email: string;
+  username?: string;
+  user_id?: string;
+  date: string; // ISO string
+  count: number;
+  exercise?: 'pushup' | 'squat';
+}
+
+const STORAGE_KEY = 'communitySessions';
+
+export function loadCommunitySessions(): CommunitySession[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function saveCommunitySession(session: CommunitySession) {
+  const sessions = loadCommunitySessions();
+  sessions.push(session);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
+
+export async function saveSessionServer(
+  token: string,
+  session: Omit<CommunitySession, 'email' | 'username'>,
+  providedUsername?: string,
+) {
+  if (token) {
+    await supabase.auth.setSession({ access_token: token, refresh_token: token });
+  }
+  const current = await supabase.auth.getSession();
+  if (!current.data.session) throw new Error('Nicht eingeloggt');
+
+  const { data: userData } = await supabase.auth.getUser();
+  const email = userData.user?.email;
+  const userId = userData.user?.id;
+  const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
+  const username = providedUsername || metaUsername;
+  if (!email && !userId) throw new Error('Kein Benutzer gefunden');
+
+  const insertData: Record<string, unknown> = {
+    user_id: userId,
+    username,
+    created_at: session.date,
+    count: session.count,
+  };
+  if (session.exercise) insertData.exercise = session.exercise;
+
+  await supabase.from('sessions').insert(insertData).throwOnError();
+
+  saveCommunitySession({
+    email: email || '',
+    username: username || undefined,
+    user_id: userId,
+    date: session.date,
+    count: session.count,
+    exercise: session.exercise,
+  });
+}
+
+export interface ScoreEntry {
+  name: string;
+  count: number;
+}
+
+export interface HighscoreResult {
+  scores: ScoreEntry[];
+  total: number;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  username: string,
+): Promise<string> {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { username } },
+  });
+  if (error || !data.session) {
+    throw new Error('Registrierung fehlgeschlagen');
+  }
+  return data.session.access_token;
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<string> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.session) {
+    throw new Error('Login fehlgeschlagen');
+  }
+  return data.session.access_token;
+}
+
 export async function fetchHighscores(
   period: 'day' | 'week' | 'month'
 ): Promise<HighscoreResult> {
