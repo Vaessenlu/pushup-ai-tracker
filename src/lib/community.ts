@@ -1,124 +1,9 @@
-export interface CommunitySession {
-  email: string;
-  username?: string;
-  user_id?: string;
-  date: string; // ISO string
-  count: number;
-  exercise?: 'pushup' | 'squat';
-}
-
-const STORAGE_KEY = 'communitySessions';
-
-export interface ScoreEntry {
-  name: string;
-  count: number;
-}
-
-export interface HighscoreResult {
-  scores: ScoreEntry[];
-  total: number;
-}
-
-export function loadCommunitySessions(): CommunitySession[] {
-  if (typeof localStorage === 'undefined') return [];
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-export function saveCommunitySession(session: CommunitySession) {
-  const sessions = loadCommunitySessions();
-  sessions.push(session);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-}
-
-import { supabase } from './supabaseClient';
-
-// --- Server API (via Supabase) ---
-
-export async function register(
-  email: string,
-  password: string,
-  username: string,
-): Promise<string> {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error || !data.session) {
-    throw new Error('Registrierung fehlgeschlagen');
-  }
-  const { error: upd } = await supabase.auth.updateUser({ data: { username } });
-  if (upd) console.warn('Username speichern fehlgeschlagen', upd.message);
-  return data.session.access_token;
-}
-
-export async function login(email: string, password: string): Promise<string> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.session) {
-    throw new Error('Login fehlgeschlagen');
-  }
-  return data.session.access_token;
-}
-
-export async function saveSessionServer(
-  token: string,
-  session: Omit<CommunitySession, 'email' | 'username'>,
-  providedUsername?: string,
-) {
-  if (token) {
-    await supabase.auth.setSession({ access_token: token, refresh_token: token });
-  }
-  const current = await supabase.auth.getSession();
-  if (!current.data.session) throw new Error('Nicht eingeloggt');
-
-  const { data: userData } = await supabase.auth.getUser();
-  const email = userData.user?.email;
-  const userId = userData.user?.id;
-  const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
-  const username = providedUsername || metaUsername;
-  if (!email && !userId) throw new Error('Kein Benutzer gefunden');
-
-  // Store locally so highscores include this session
-  saveCommunitySession({
-    email: email || '',
-    username: username || undefined,
-    user_id: userId,
-    date: session.date,
-    count: session.count,
-    exercise: session.exercise,
-  });
-
-  const insertData: Record<string, unknown> = {
-    user_id: userId,
-    username,
-    created_at: session.date,
-    count: session.count,
-  };
-  if (session.exercise) insertData.exercise = session.exercise;
-
-  try {
-    await supabase.from('sessions').insert(insertData).throwOnError();
-  } catch (err) {
-    const msg = (err as { message?: string }).message || '';
-    if (msg.includes('created_at')) {
-      const fallback = { ...insertData, date: insertData.created_at };
-      delete fallback.created_at;
-      await supabase.from('sessions').insert(fallback).throwOnError();
-    } else if (msg.includes('exercise') || (err as { code?: string }).code === '42703') {
-      const { exercise, ...noExercise } = insertData;
-      await supabase.from('sessions').insert(noExercise).throwOnError();
-    } else {
-      throw err;
-    }
-  }
-}
-
 export async function fetchHighscores(
-  period: 'day' | 'week' | 'month',
-  exercise: 'pushup' | 'squat' = 'pushup',
+  period: 'day' | 'week' | 'month'
 ): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
+
   if (period === 'day') {
     start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   } else if (period === 'week') {
@@ -133,89 +18,41 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let { data, error } = await supabase
     .from('sessions')
-    .select('user_id, username, count, created_at, exercise')
-    .gte('created_at', iso)
-    .eq('exercise', exercise);
+    .select('user_id, username, count, created_at')
+    .gte('created_at', iso);
 
-  if (error && (error.message?.includes('exercise') || error.code === '42703')) {
-    const res = await supabase
-      .from('sessions')
-      .select('user_id, username, count, created_at')
-      .gte('created_at', iso);
-    data = res.data || null;
-    error = res.error;
-  }
   if (error) {
-    console.warn('Falling back to local highscores', error.message);
-    return computeHighscores(period, exercise);
-  }
+    const msg = error.message || '';
+    const code = error.code;
 
-  const sessions: CommunitySession[] = (data || []).map(r => ({
-    email: '',
-    username: (r as { username?: string | null }).username || undefined,
-    user_id: (r as { user_id?: string | null }).user_id || undefined,
-    date: (r as { created_at: string }).created_at,
-    count: (r as { count: number }).count,
-    exercise: (r as { exercise?: string | null }).exercise as
-      | 'pushup'
-      | 'squat'
-      | undefined,
-  }));
-  sessions.forEach(saveCommunitySession);
-  return computeHighscoresFromSessions(sessions, period, exercise);
-}
+    // Fallback: wenn Spalte fehlt oder Query-Fehler
+    if (msg.includes('username') || msg.includes('created_at') || code === '42703') {
+      const fallback = await supabase
+        .from('sessions')
+        .select('user_id, count, created_at')
+        .gte('created_at', iso);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
-
-export function computeHighscores(
-  period: 'day' | 'week' | 'month',
-  exercise: 'pushup' | 'squat' = 'pushup'
-): HighscoreResult {
-  const sessions = loadCommunitySessions();
-  return computeHighscoresFromSessions(sessions, period, exercise);
-}
-
-export function computeHighscoresFromSessions(
-  sessions: CommunitySession[],
-  period: 'day' | 'week' | 'month',
-  exercise: 'pushup' | 'squat' = 'pushup',
-): HighscoreResult {
-  const now = new Date();
-  let start: Date;
-  if (period === 'day') {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  } else if (period === 'week') {
-    const day = (now.getDay() + 6) % 7; // Monday = 0
-    start = new Date(now);
-    start.setDate(now.getDate() - day);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (error) throw new Error('Fehler beim Laden der Highscores');
   }
 
   const totals = new Map<string, { name: string; count: number }>();
-  const idToName = new Map<string, string>();
   let totalCount = 0;
-  sessions.forEach(s => {
-    const d = new Date(s.date);
-    if (d >= start) {
-      if (s.exercise && s.exercise !== exercise) {
-        return;
-      }
-      const id = s.user_id;
-      let name: string | undefined = s.username?.trim();
-      if (!name && s.email?.trim()) {
-        name = s.email.trim();
-      }
-      if (name && id) idToName.set(id, name);
-      if (!name && id && idToName.has(id)) name = idToName.get(id);
-      if (!name && id) name = id;
-      if (!name) return;
-      const key = name.toLowerCase();
-      totalCount += s.count;
-      const existing = totals.get(key);
-      if (existing) existing.count += s.count;
-      else totals.set(key, { name, count: s.count });
-    }
+
+  (data || []).forEach(r => {
+    const uid = (r as any).user_id;
+    const name =
+      typeof r.username === 'string' && r.username.trim()
+        ? r.username.trim()
+        : uid || 'Unbekannt';
+
+    const key = name.toLowerCase();
+    totalCount += r.count as number;
+    const existing = totals.get(key);
+    if (existing) existing.count += r.count as number;
+    else totals.set(key, { name, count: r.count as number });
   });
 
   const scores = Array.from(totals.values())
