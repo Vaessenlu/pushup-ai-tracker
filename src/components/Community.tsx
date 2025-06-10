@@ -12,10 +12,12 @@ import {
 import { supabase } from '@/lib/supabaseClient';
 import { Users } from 'lucide-react';
 
+import type { AuthTokens } from '@/lib/community';
+
 interface CommunityProps {
   email: string | null;
-  token: string | null;
-  onAuth: (email: string, token: string, username: string) => void;
+  token: AuthTokens | null;
+  onAuth: (email: string, token: AuthTokens, username: string) => void;
   refreshTrigger: number;
   exercise: 'pushup' | 'squat';
 }
@@ -26,7 +28,7 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regUsername, setRegUsername] = useState('');
-  const [token, setToken] = useState<string | null>(propToken);
+  const [token, setToken] = useState<AuthTokens | null>(propToken);
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
   const [monthly, setMonthly] = useState<ScoreEntry[]>([]);

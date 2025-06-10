@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
-import { saveCommunitySession, saveSessionServer } from '@/lib/community';
+import { saveCommunitySession, saveSessionServer, type AuthTokens } from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
@@ -30,16 +30,17 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
-  const [communityToken, setCommunityToken] = useState<string | null>(null);
+  const [communityToken, setCommunityToken] = useState<AuthTokens | null>(null);
   const [communityUsername, setCommunityUsername] = useState<string | null>(null);
   const [highscoreTrigger, setHighscoreTrigger] = useState(0);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('communityEmail');
-    const storedToken = localStorage.getItem('communityToken');
+    const storedAccess = localStorage.getItem('communityToken');
+    const storedRefresh = localStorage.getItem('communityRefreshToken');
     const storedUsername = localStorage.getItem('communityUsername');
     if (storedEmail) setCommunityEmail(storedEmail);
-    if (storedToken) setCommunityToken(storedToken);
+    if (storedAccess && storedRefresh) setCommunityToken({ access_token: storedAccess, refresh_token: storedRefresh });
     if (storedUsername) setCommunityUsername(storedUsername);
   }, []);
 
@@ -82,13 +83,14 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     load();
   }, [user?.id]);
 
-  const handleRegister = (email: string, token: string, username: string) => {
+  const handleRegister = (email: string, token: AuthTokens, username: string) => {
     setCommunityEmail(email);
     setCommunityToken(token);
     setCommunityUsername(username);
     localStorage.setItem('communityUsername', username);
     localStorage.setItem('communityEmail', email);
-    localStorage.setItem('communityToken', token);
+    localStorage.setItem('communityToken', token.access_token);
+    localStorage.setItem('communityRefreshToken', token.refresh_token);
   };
 
   const handleSessionComplete = async (session: Omit<Session, 'id'>) => {
@@ -128,7 +130,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     }
     setSessions(prev => [newSession, ...prev]);
     if (communityToken) {
-      saveSessionServer(
+      await saveSessionServer(
         communityToken,
         {
           date: new Date().toISOString(),
