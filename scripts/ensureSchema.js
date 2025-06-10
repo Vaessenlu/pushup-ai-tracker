@@ -37,6 +37,8 @@ async function ensureColumn(name, type) {
   await ensureColumn('email', 'text');
   await ensureColumn('username', 'text');
   await ensureColumn('user_id', 'uuid');
+  // store the type of exercise (pushup, squat, ...)
+  await ensureColumn('exercise_type', 'text');
   await ensureColumn('exercise', 'text');
   await ensureColumn('duration', 'integer');
   await ensureColumn('created_at', 'timestamp with time zone DEFAULT now()');

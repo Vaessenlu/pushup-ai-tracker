@@ -27,6 +27,7 @@ export interface Session {
   duration: number;
   avgTimePerRep: number;
   exercise: 'pushup' | 'squat';
+  exercise_type?: 'pushup' | 'squat';
 }
 
 interface IndexProps {
@@ -82,13 +83,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
       let { data, error } = await supabase
         .from('sessions')
-        .select('id, count, duration, created_at, exercise')
+        .select('id, count, duration, created_at, exercise_type, exercise')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error && (error.message?.includes('exercise') || error.code === '42703')) {
         const res = await supabase
           .from('sessions')
-          .select('id, count, duration, created_at')
+          .select('id, count, duration, created_at, exercise_type, exercise')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
         data = res.data;
@@ -105,7 +106,18 @@ const Index: React.FC<IndexProps> = ({ user }) => {
               (s.duration as number) && (s.count as number)
                 ? (s.duration as number) / (s.count as number)
                 : 0,
-            exercise: (s as Record<string, string | number>).exercise as 'pushup' | 'squat' || 'pushup',
+            exercise:
+              ((s as Record<string, string | number>).exercise_type as
+                | 'pushup'
+                | 'squat') ||
+              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              'pushup',
+            exercise_type:
+              ((s as Record<string, string | number>).exercise_type as
+                | 'pushup'
+                | 'squat') ||
+              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              'pushup',
           }))
         );
       }
@@ -125,7 +137,14 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       try {
         const { data } = await supabase
           .from('sessions')
-          .insert({ user_id: user.id, count: session.count, duration: session.duration, exercise: session.exercise, username })
+          .insert({
+            user_id: user.id,
+            count: session.count,
+            duration: session.duration,
+            exercise: session.exercise,
+            exercise_type: session.exercise,
+            username,
+          })
           .select('id')
           .single();
         if (data?.id) {
@@ -137,7 +156,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           try {
             const { data } = await supabase
               .from('sessions')
-              .insert({ user_id: user.id, count: session.count, duration: session.duration, username })
+              .insert({
+                user_id: user.id,
+                count: session.count,
+                duration: session.duration,
+                exercise_type: session.exercise,
+                username,
+              })
               .select('id')
               .single();
             if (data?.id) newSession = { ...newSession, id: data.id };
@@ -161,6 +186,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           date: new Date().toISOString(),
           count: newSession.count,
           exercise: newSession.exercise,
+          exercise_type: newSession.exercise,
         },
         communityUsername || undefined,
       );
@@ -171,6 +197,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         date: new Date().toISOString(),
         count: newSession.count,
         exercise: newSession.exercise,
+        exercise_type: newSession.exercise,
       });
     }
 

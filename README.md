@@ -87,6 +87,8 @@ Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Dana
 
 Um sicherzustellen, dass die Tabelle `sessions` alle benötigten Spalten enthält, steht das Skript `npm run ensure-schema` bereit. Dieses verwendet einen Supabase **Service Role Key** und kann fehlende Spalten automatisch anlegen. Das Skript wird beim Start von `npm run dev` automatisch ausgeführt.
 
+Neu ist die Spalte `exercise_type`, die den Typ der absolvierten Übung (z.B. `pushup` oder `squat`) speichert. Das Skript legt sie bei Bedarf ebenfalls an.
+
 Speichere dazu die Variable `SUPABASE_SERVICE_ROLE_KEY` in deiner `.env` und führe anschließend `npm run dev` aus.
 
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen

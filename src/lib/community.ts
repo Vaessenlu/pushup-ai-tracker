@@ -7,6 +7,7 @@ export interface CommunitySession {
   date: string; // ISO string
   count: number;
   exercise?: 'pushup' | 'squat';
+  exercise_type?: 'pushup' | 'squat';
 }
 
 const STORAGE_KEY = 'communitySessions';
@@ -80,17 +81,22 @@ export async function saveSessionServer(
     created_at: session.date,
     count: session.count,
   };
-  if (session.exercise) insertData.exercise = session.exercise;
+  if (session.exercise) {
+    insertData.exercise = session.exercise;
+    insertData.exercise_type = session.exercise;
+  }
 
   let { error } = await supabase.from('sessions').insert(insertData);
   if (error) {
+    const base = { count: session.count };
     const variants: Record<string, unknown>[] = [
-      { user_id: userId, username, created_at: session.date, count: session.count },
-      { user_id: userId, created_at: session.date, count: session.count },
-      { user_id: userId, count: session.count },
-      { username, created_at: session.date, count: session.count },
-      { username, count: session.count },
-      { count: session.count },
+      { user_id: userId, username, created_at: session.date, exercise_type: session.exercise, ...base },
+      { user_id: userId, created_at: session.date, exercise_type: session.exercise, ...base },
+      { user_id: userId, exercise_type: session.exercise, ...base },
+      { username, created_at: session.date, exercise_type: session.exercise, ...base },
+      { username, exercise_type: session.exercise, ...base },
+      { exercise_type: session.exercise, ...base },
+      base,
     ];
     for (const variant of variants) {
       const res = await supabase.from('sessions').insert(variant);
@@ -110,6 +116,7 @@ export async function saveSessionServer(
     date: session.date,
     count: session.count,
     exercise: session.exercise,
+    exercise_type: session.exercise,
   });
 }
 
@@ -180,9 +187,11 @@ export async function fetchHighscores(
   const iso = start.toISOString();
   let query = supabase
     .from('sessions')
-    .select('user_id, username, count, created_at, exercise')
+    .select('user_id, username, count, created_at, exercise_type, exercise')
     .gte('created_at', iso);
-  if (exercise) query = query.eq('exercise', exercise);
+  if (exercise) query = query.or(
+    `exercise.eq.${exercise},exercise_type.eq.${exercise}`
+  );
   let { data, error } = await query;
 
   if (error) {
@@ -193,9 +202,12 @@ export async function fetchHighscores(
     if (msg.includes('username') || msg.includes('created_at') || code === '42703') {
       let fallbackQuery = supabase
         .from('sessions')
-        .select('user_id, count, created_at')
+        .select('user_id, count, created_at, exercise_type, exercise')
         .gte('created_at', iso);
-      if (exercise) fallbackQuery = fallbackQuery.eq('exercise', exercise);
+      if (exercise)
+        fallbackQuery = fallbackQuery.or(
+          `exercise.eq.${exercise},exercise_type.eq.${exercise}`
+        );
       const fallback = await fallbackQuery;
       data = fallback.data;
       error = fallback.error;
