@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
-import { saveCommunitySession, saveSessionServer, type AuthTokens } from '@/lib/community';
+import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
@@ -30,19 +30,42 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
-  const [communityToken, setCommunityToken] = useState<AuthTokens | null>(null);
   const [communityUsername, setCommunityUsername] = useState<string | null>(null);
   const [highscoreTrigger, setHighscoreTrigger] = useState(0);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('communityEmail');
-    const storedAccess = localStorage.getItem('communityToken');
-    const storedRefresh = localStorage.getItem('communityRefreshToken');
     const storedUsername = localStorage.getItem('communityUsername');
     if (storedEmail) setCommunityEmail(storedEmail);
-    if (storedAccess && storedRefresh) setCommunityToken({ access_token: storedAccess, refresh_token: storedRefresh });
     if (storedUsername) setCommunityUsername(storedUsername);
   }, []);
+
+  useEffect(() => {
+    async function syncSession() {
+      if (!user) {
+        setCommunityEmail(null);
+        setCommunityUsername(null);
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        const u = data.session.user;
+        if (u.email) {
+          setCommunityEmail(u.email);
+          localStorage.setItem('communityEmail', u.email);
+        }
+        const uname = (u.user_metadata as { username?: string }).username;
+        if (uname) {
+          setCommunityUsername(uname);
+          localStorage.setItem('communityUsername', uname);
+        } else {
+          setCommunityUsername(null);
+          localStorage.removeItem('communityUsername');
+        }
+      }
+    }
+    syncSession();
+  }, [user]);
 
   useEffect(() => {
     async function load() {
@@ -83,15 +106,6 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     load();
   }, [user?.id]);
 
-  const handleRegister = (email: string, token: AuthTokens, username: string) => {
-    setCommunityEmail(email);
-    setCommunityToken(token);
-    setCommunityUsername(username);
-    localStorage.setItem('communityUsername', username);
-    localStorage.setItem('communityEmail', email);
-    localStorage.setItem('communityToken', token.access_token);
-    localStorage.setItem('communityRefreshToken', token.refresh_token);
-  };
 
   const handleSessionComplete = async (session: Omit<Session, 'id'>) => {
     let newSession: Session = {
@@ -129,9 +143,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
     }
     setSessions(prev => [newSession, ...prev]);
-    if (communityToken) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
       await saveSessionServer(
-        communityToken,
+        {
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+        },
         {
           date: new Date().toISOString(),
           count: newSession.count,
@@ -289,16 +307,10 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           <TabsContent value="community">
             <div className="grid md:grid-cols-2 gap-4">
               <Community
-                email={communityEmail}
-                token={communityToken}
-                onAuth={handleRegister}
                 refreshTrigger={highscoreTrigger}
                 exercise="pushup"
               />
               <Community
-                email={communityEmail}
-                token={communityToken}
-                onAuth={handleRegister}
                 refreshTrigger={highscoreTrigger}
                 exercise="squat"
               />
