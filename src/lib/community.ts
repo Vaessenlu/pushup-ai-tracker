@@ -26,13 +26,28 @@ export function saveCommunitySession(session: CommunitySession) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
 }
 
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+}
+
+export async function isUsernameTaken(username: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id')
+    .ilike('username', username.trim())
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}
+
 export async function saveSessionServer(
-  token: string,
+  tokens: AuthTokens,
   session: Omit<CommunitySession, 'email' | 'username'>,
   providedUsername?: string,
 ) {
-  if (token) {
-    await supabase.auth.setSession({ access_token: token, refresh_token: token });
+  if (tokens) {
+    await supabase.auth.setSession(tokens);
   }
   const current = await supabase.auth.getSession();
   if (!current.data.session) throw new Error('Nicht eingeloggt');
@@ -44,6 +59,13 @@ export async function saveSessionServer(
   const username = providedUsername || metaUsername;
   if (!email && !userId) throw new Error('Kein Benutzer gefunden');
 
+  if (providedUsername && providedUsername !== metaUsername) {
+    if (await isUsernameTaken(providedUsername)) {
+      throw new Error('Benutzername bereits vergeben');
+    }
+    await supabase.auth.updateUser({ data: { username: providedUsername } });
+  }
+
   const insertData: Record<string, unknown> = {
     user_id: userId,
     username,
@@ -52,7 +74,26 @@ export async function saveSessionServer(
   };
   if (session.exercise) insertData.exercise = session.exercise;
 
-  await supabase.from('sessions').insert(insertData).throwOnError();
+  let { error } = await supabase.from('sessions').insert(insertData);
+  if (error) {
+    const variants: Record<string, unknown>[] = [
+      { user_id: userId, username, created_at: session.date, count: session.count },
+      { user_id: userId, created_at: session.date, count: session.count },
+      { user_id: userId, count: session.count },
+      { username, created_at: session.date, count: session.count },
+      { username, count: session.count },
+      { count: session.count },
+    ];
+    for (const variant of variants) {
+      const res = await supabase.from('sessions').insert(variant);
+      if (!res.error) {
+        error = undefined;
+        break;
+      }
+      error = res.error;
+    }
+    if (error) throw error;
+  }
 
   saveCommunitySession({
     email: email || '',
@@ -78,7 +119,10 @@ export async function register(
   email: string,
   password: string,
   username: string,
-): Promise<string> {
+): Promise<AuthTokens> {
+  if (await isUsernameTaken(username)) {
+    throw new Error('Benutzername bereits vergeben');
+  }
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -87,18 +131,24 @@ export async function register(
   if (error || !data.session) {
     throw new Error('Registrierung fehlgeschlagen');
   }
-  return data.session.access_token;
+  return {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  };
 }
 
 export async function login(
   email: string,
   password: string,
-): Promise<string> {
+): Promise<AuthTokens> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.session) {
     throw new Error('Login fehlgeschlagen');
   }
-  return data.session.access_token;
+  return {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  };
 }
 
 export async function fetchHighscores(
@@ -145,7 +195,7 @@ export async function fetchHighscores(
   let totalCount = 0;
 
   (data || []).forEach(r => {
-    const uid = (r as any).user_id;
+    const uid = (r as Record<string, unknown>).user_id as string | undefined;
     const name =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()

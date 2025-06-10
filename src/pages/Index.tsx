@@ -30,18 +30,42 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [communityEmail, setCommunityEmail] = useState<string | null>(null);
-  const [communityToken, setCommunityToken] = useState<string | null>(null);
   const [communityUsername, setCommunityUsername] = useState<string | null>(null);
   const [highscoreTrigger, setHighscoreTrigger] = useState(0);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem('communityEmail');
-    const storedToken = localStorage.getItem('communityToken');
     const storedUsername = localStorage.getItem('communityUsername');
     if (storedEmail) setCommunityEmail(storedEmail);
-    if (storedToken) setCommunityToken(storedToken);
     if (storedUsername) setCommunityUsername(storedUsername);
   }, []);
+
+  useEffect(() => {
+    async function syncSession() {
+      if (!user) {
+        setCommunityEmail(null);
+        setCommunityUsername(null);
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        const u = data.session.user;
+        if (u.email) {
+          setCommunityEmail(u.email);
+          localStorage.setItem('communityEmail', u.email);
+        }
+        const uname = (u.user_metadata as { username?: string }).username;
+        if (uname) {
+          setCommunityUsername(uname);
+          localStorage.setItem('communityUsername', uname);
+        } else {
+          setCommunityUsername(null);
+          localStorage.removeItem('communityUsername');
+        }
+      }
+    }
+    syncSession();
+  }, [user]);
 
   useEffect(() => {
     async function load() {
@@ -82,14 +106,6 @@ const Index: React.FC<IndexProps> = ({ user }) => {
     load();
   }, [user?.id]);
 
-  const handleRegister = (email: string, token: string, username: string) => {
-    setCommunityEmail(email);
-    setCommunityToken(token);
-    setCommunityUsername(username);
-    localStorage.setItem('communityUsername', username);
-    localStorage.setItem('communityEmail', email);
-    localStorage.setItem('communityToken', token);
-  };
 
   const handleSessionComplete = async (session: Omit<Session, 'id'>) => {
     let newSession: Session = {
@@ -127,9 +143,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
     }
     setSessions(prev => [newSession, ...prev]);
-    if (communityToken) {
-      saveSessionServer(
-        communityToken,
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      await saveSessionServer(
+        {
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+        },
         {
           date: new Date().toISOString(),
           count: newSession.count,
@@ -287,16 +307,10 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           <TabsContent value="community">
             <div className="grid md:grid-cols-2 gap-4">
               <Community
-                email={communityEmail}
-                token={communityToken}
-                onAuth={handleRegister}
                 refreshTrigger={highscoreTrigger}
                 exercise="pushup"
               />
               <Community
-                email={communityEmail}
-                token={communityToken}
-                onAuth={handleRegister}
                 refreshTrigger={highscoreTrigger}
                 exercise="squat"
               />
