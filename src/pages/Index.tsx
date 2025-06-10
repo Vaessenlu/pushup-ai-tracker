@@ -49,11 +49,20 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         setSessions([]);
         return;
       }
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('sessions')
         .select('id, count, duration, created_at, exercise')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      if (error && (error.message?.includes('exercise') || error.code === '42703')) {
+        const res = await supabase
+          .from('sessions')
+          .select('id, count, duration, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      }
       if (data) {
         setSessions(
           data.map((s) => ({
@@ -124,6 +133,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         {
           date: new Date().toISOString(),
           count: newSession.count,
+          exercise: newSession.exercise,
         },
         communityUsername || undefined,
       );
@@ -133,6 +143,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         username: communityUsername || undefined,
         date: new Date().toISOString(),
         count: newSession.count,
+        exercise: newSession.exercise,
       });
     }
 
@@ -149,11 +160,16 @@ const Index: React.FC<IndexProps> = ({ user }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-pink-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 gap-2">
           {user ? (
-            <Button variant="outline" onClick={() => supabase.auth.signOut()}>
-              Logout
-            </Button>
+            <>
+              <Link to="/account">
+                <Button variant="outline">Account</Button>
+              </Link>
+              <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+                Logout
+              </Button>
+            </>
           ) : (
             <Link to="/login">
               <Button variant="outline">Login / Registrieren</Button>

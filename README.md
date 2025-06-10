@@ -85,6 +85,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-key>
 ```
 Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Danach `npm run dev` oder `npm run build` ausführen.
 
+Um sicherzustellen, dass die Tabelle `sessions` alle benötigten Spalten enthält, steht das Skript `npm run ensure-schema` bereit. Dieses verwendet einen Supabase **Service Role Key** und kann fehlende Spalten automatisch anlegen. Das Skript wird beim Start von `npm run dev` automatisch ausgeführt.
+
+Speichere dazu die Variable `SUPABASE_SERVICE_ROLE_KEY` in deiner `.env` und führe anschließend `npm run dev` aus.
+
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
 mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 Du meldest dich danach mit deiner E-Mail-Adresse und deinem Passwort an.
