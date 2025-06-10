@@ -29,6 +29,10 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
   const [regPassword, setRegPassword] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [token, setToken] = useState<AuthTokens | null>(propToken);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [needsUsername, setNeedsUsername] = useState(false);
+  const [pendingToken, setPendingToken] = useState<AuthTokens | null>(null);
+  const [pendingEmail, setPendingEmail] = useState('');
   const [daily, setDaily] = useState<ScoreEntry[]>([]);
   const [weekly, setWeekly] = useState<ScoreEntry[]>([]);
   const [monthly, setMonthly] = useState<ScoreEntry[]>([]);
@@ -110,12 +114,20 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
                   if (loginEmail && loginPassword) {
                     try {
                       const t = await login(loginEmail, loginPassword);
+                      await supabase.auth.setSession(t);
                       const { data } = await supabase.auth.getUser();
                       const uname =
                         (data.user?.user_metadata as { username?: string })?.username || '';
-                      setToken(t);
-                      onAuth(loginEmail, t, uname);
-                      setError(null);
+                      if (uname) {
+                        setToken(t);
+                        onAuth(loginEmail, t, uname);
+                        setError(null);
+                      } else {
+                        setNeedsUsername(true);
+                        setPendingToken(t);
+                        setPendingEmail(loginEmail);
+                        setError('Bitte Benutzernamen eingeben');
+                      }
                     } catch (e) {
                       setError((e as Error).message);
                     }
@@ -126,6 +138,40 @@ export const Community: React.FC<CommunityProps> = ({ email, token: propToken, o
               >
                 Login
               </Button>
+              {needsUsername && (
+                <>
+                  <Input
+                    value={loginUsername}
+                    onChange={e => setLoginUsername(e.target.value)}
+                    placeholder="Benutzername"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!loginUsername) {
+                        setError('Bitte Benutzernamen eingeben');
+                        return;
+                      }
+                      if (!pendingToken) {
+                        setError('Login fehlgeschlagen');
+                        return;
+                      }
+                      try {
+                        await supabase.auth.setSession(pendingToken);
+                        await supabase.auth.updateUser({ data: { username: loginUsername } });
+                        setToken(pendingToken);
+                        onAuth(pendingEmail, pendingToken, loginUsername);
+                        setNeedsUsername(false);
+                        setLoginUsername('');
+                        setError(null);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      }
+                    }}
+                  >
+                    Speichern
+                  </Button>
+                </>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <h4 className="font-medium">Registrieren</h4>
