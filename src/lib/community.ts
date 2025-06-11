@@ -199,10 +199,15 @@ export async function fetchHighscores(
     const code = error.code;
 
     // Fallback: wenn Spalte fehlt oder Query-Fehler
-    if (msg.includes('username') || msg.includes('created_at') || code === '42703') {
+    if (
+      msg.includes('username') ||
+      msg.includes('created_at') ||
+      msg.includes('exercise') ||
+      code === '42703'
+    ) {
       let fallbackQuery = supabase
         .from('sessions')
-        .select('user_id, count, created_at, exercise_type, exercise')
+        .select('user_id, count, created_at')
         .gte('created_at', iso);
       if (exercise)
         fallbackQuery = fallbackQuery.or(
