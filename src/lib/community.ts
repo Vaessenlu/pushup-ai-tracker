@@ -218,7 +218,32 @@ export async function fetchHighscores(
       error = fallback.error;
     }
 
-    if (error) throw new Error('Fehler beim Laden der Highscores');
+    if (error) {
+      // No read access? fall back to local sessions
+      const local = loadCommunitySessions().filter(s => {
+        const d = new Date(s.date);
+        return d >= start &&
+          (!exercise || s.exercise === exercise || s.exercise_type === exercise);
+      });
+      if (local.length === 0) throw new Error('Fehler beim Laden der Highscores');
+
+      const totals = new Map<string, { name: string; count: number }>();
+      let totalCount = 0;
+
+      local.forEach(r => {
+        const name = r.username?.trim() || r.email || r.user_id || 'Unbekannt';
+        const key = name.toLowerCase();
+        totalCount += r.count;
+        const existing = totals.get(key);
+        if (existing) existing.count += r.count;
+        else totals.set(key, { name, count: r.count });
+      });
+
+      const scores = Array.from(totals.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      return { scores, total: totalCount };
+    }
   }
 
   const totals = new Map<string, { name: string; count: number }>();

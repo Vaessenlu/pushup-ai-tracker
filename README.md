@@ -109,7 +109,8 @@ Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
 und Highscore-Abfragen verwendet. Melde dich im "Community"-Tab an, damit deine
 Sessions gespeichert werden. Die Highscores sind auch ohne Login sichtbar.
 Stelle sicher, dass die Tabelle `sessions` öffentlich lesbar ist oder passende
-Row-Level-Security-Regeln eingerichtet sind.
+Row-Level-Security-Regeln eingerichtet sind. Fehlen diese Rechte, wertet die
+App lediglich deine lokal gespeicherten Sessions aus.
 
 
 ### 4. Deployment
