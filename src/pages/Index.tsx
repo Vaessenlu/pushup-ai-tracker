@@ -7,6 +7,13 @@ import Community from '@/components/Community';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+} from '@/components/ui/carousel';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
 import { saveCommunitySession, saveSessionServer } from '@/lib/community';
 import { supabase } from '@/lib/supabaseClient';
@@ -20,6 +27,7 @@ export interface Session {
   duration: number;
   avgTimePerRep: number;
   exercise: 'pushup' | 'squat';
+  exercise_type?: 'pushup' | 'squat';
 }
 
 interface IndexProps {
@@ -75,13 +83,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
       let { data, error } = await supabase
         .from('sessions')
-        .select('id, count, duration, created_at, exercise')
+        .select('id, count, duration, created_at, exercise_type, exercise')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error && (error.message?.includes('exercise') || error.code === '42703')) {
         const res = await supabase
           .from('sessions')
-          .select('id, count, duration, created_at')
+          .select('id, count, duration, created_at, exercise_type, exercise')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
         data = res.data;
@@ -98,7 +106,18 @@ const Index: React.FC<IndexProps> = ({ user }) => {
               (s.duration as number) && (s.count as number)
                 ? (s.duration as number) / (s.count as number)
                 : 0,
-            exercise: (s as Record<string, string | number>).exercise as 'pushup' | 'squat' || 'pushup',
+            exercise:
+              ((s as Record<string, string | number>).exercise_type as
+                | 'pushup'
+                | 'squat') ||
+              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              'pushup',
+            exercise_type:
+              ((s as Record<string, string | number>).exercise_type as
+                | 'pushup'
+                | 'squat') ||
+              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              'pushup',
           }))
         );
       }
@@ -118,7 +137,14 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       try {
         const { data } = await supabase
           .from('sessions')
-          .insert({ user_id: user.id, count: session.count, duration: session.duration, exercise: session.exercise, username })
+          .insert({
+            user_id: user.id,
+            count: session.count,
+            duration: session.duration,
+            exercise: session.exercise,
+            exercise_type: session.exercise,
+            username,
+          })
           .select('id')
           .single();
         if (data?.id) {
@@ -130,7 +156,13 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           try {
             const { data } = await supabase
               .from('sessions')
-              .insert({ user_id: user.id, count: session.count, duration: session.duration, username })
+              .insert({
+                user_id: user.id,
+                count: session.count,
+                duration: session.duration,
+                exercise_type: session.exercise,
+                username,
+              })
               .select('id')
               .single();
             if (data?.id) newSession = { ...newSession, id: data.id };
@@ -154,6 +186,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
           date: new Date().toISOString(),
           count: newSession.count,
           exercise: newSession.exercise,
+          exercise_type: newSession.exercise,
         },
         communityUsername || undefined,
       );
@@ -164,6 +197,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
         date: new Date().toISOString(),
         count: newSession.count,
         exercise: newSession.exercise,
+        exercise_type: newSession.exercise,
       });
     }
 
@@ -203,11 +237,11 @@ const Index: React.FC<IndexProps> = ({ user }) => {
               <Activity className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent">
-              Push Up Tracker
+              movementtracker
             </h1>
           </div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Zähle deine Liegestützen automatisch und verfolge deine Fortschritte.
+            Zähle deine Übungen automatisch und verfolge deine Fortschritte.
           </p>
         </div>
 
@@ -305,16 +339,24 @@ const Index: React.FC<IndexProps> = ({ user }) => {
             <SessionHistory sessions={sessions} />
           </TabsContent>
           <TabsContent value="community">
-            <div className="grid md:grid-cols-2 gap-4">
-              <Community
-                refreshTrigger={highscoreTrigger}
-                exercise="pushup"
-              />
-              <Community
-                refreshTrigger={highscoreTrigger}
-                exercise="squat"
-              />
-            </div>
+            <Carousel className="w-full">
+              <CarouselContent>
+                <CarouselItem className="basis-full">
+                  <Community
+                    refreshTrigger={highscoreTrigger}
+                    exercise="pushup"
+                  />
+                </CarouselItem>
+                <CarouselItem className="basis-full">
+                  <Community
+                    refreshTrigger={highscoreTrigger}
+                    exercise="squat"
+                  />
+                </CarouselItem>
+              </CarouselContent>
+              <CarouselPrevious />
+              <CarouselNext />
+            </Carousel>
           </TabsContent>
         </Tabs>
       </div>

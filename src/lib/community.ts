@@ -7,6 +7,7 @@ export interface CommunitySession {
   date: string; // ISO string
   count: number;
   exercise?: 'pushup' | 'squat';
+  exercise_type?: 'pushup' | 'squat';
 }
 
 const STORAGE_KEY = 'communitySessions';
@@ -32,13 +33,21 @@ export interface AuthTokens {
 }
 
 export async function isUsernameTaken(username: string): Promise<boolean> {
+  const trimmed = username.trim();
   const { data, error } = await supabase
     .from('sessions')
-    .select('id')
-    .ilike('username', username.trim())
+    .select('username')
+    .ilike('username', trimmed)
     .limit(1);
   if (error) return false;
-  return (data?.length ?? 0) > 0;
+  return (
+    (data?.length ?? 0) > 0 &&
+    data.some(
+      r =>
+        typeof r.username === 'string' &&
+        r.username.trim().toLowerCase() === trimmed.toLowerCase(),
+    )
+  );
 }
 
 export async function saveSessionServer(
@@ -72,17 +81,22 @@ export async function saveSessionServer(
     created_at: session.date,
     count: session.count,
   };
-  if (session.exercise) insertData.exercise = session.exercise;
+  if (session.exercise) {
+    insertData.exercise = session.exercise;
+    insertData.exercise_type = session.exercise;
+  }
 
   let { error } = await supabase.from('sessions').insert(insertData);
   if (error) {
+    const base = { count: session.count };
     const variants: Record<string, unknown>[] = [
-      { user_id: userId, username, created_at: session.date, count: session.count },
-      { user_id: userId, created_at: session.date, count: session.count },
-      { user_id: userId, count: session.count },
-      { username, created_at: session.date, count: session.count },
-      { username, count: session.count },
-      { count: session.count },
+      { user_id: userId, username, created_at: session.date, exercise_type: session.exercise, ...base },
+      { user_id: userId, created_at: session.date, exercise_type: session.exercise, ...base },
+      { user_id: userId, exercise_type: session.exercise, ...base },
+      { username, created_at: session.date, exercise_type: session.exercise, ...base },
+      { username, exercise_type: session.exercise, ...base },
+      { exercise_type: session.exercise, ...base },
+      base,
     ];
     for (const variant of variants) {
       const res = await supabase.from('sessions').insert(variant);
@@ -102,6 +116,7 @@ export async function saveSessionServer(
     date: session.date,
     count: session.count,
     exercise: session.exercise,
+    exercise_type: session.exercise,
   });
 }
 
@@ -152,7 +167,8 @@ export async function login(
 }
 
 export async function fetchHighscores(
-  period: 'day' | 'week' | 'month'
+  period: 'day' | 'week' | 'month',
+  exercise?: 'pushup' | 'squat'
 ): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
@@ -169,26 +185,65 @@ export async function fetchHighscores(
   }
 
   const iso = start.toISOString();
-  let { data, error } = await supabase
+  let query = supabase
     .from('sessions')
-    .select('user_id, username, count, created_at')
+    .select('user_id, username, count, created_at, exercise_type, exercise')
     .gte('created_at', iso);
+  if (exercise) query = query.or(
+    `exercise.eq.${exercise},exercise_type.eq.${exercise}`
+  );
+  let { data, error } = await query;
 
   if (error) {
     const msg = error.message || '';
     const code = error.code;
 
     // Fallback: wenn Spalte fehlt oder Query-Fehler
-    if (msg.includes('username') || msg.includes('created_at') || code === '42703') {
-      const fallback = await supabase
+    if (
+      msg.includes('username') ||
+      msg.includes('created_at') ||
+      msg.includes('exercise') ||
+      code === '42703'
+    ) {
+      let fallbackQuery = supabase
         .from('sessions')
         .select('user_id, count, created_at')
         .gte('created_at', iso);
+      if (exercise)
+        fallbackQuery = fallbackQuery.or(
+          `exercise.eq.${exercise},exercise_type.eq.${exercise}`
+        );
+      const fallback = await fallbackQuery;
       data = fallback.data;
       error = fallback.error;
     }
 
-    if (error) throw new Error('Fehler beim Laden der Highscores');
+    if (error) {
+      // No read access? fall back to local sessions
+      const local = loadCommunitySessions().filter(s => {
+        const d = new Date(s.date);
+        return d >= start &&
+          (!exercise || s.exercise === exercise || s.exercise_type === exercise);
+      });
+      if (local.length === 0) throw new Error('Fehler beim Laden der Highscores');
+
+      const totals = new Map<string, { name: string; count: number }>();
+      let totalCount = 0;
+
+      local.forEach(r => {
+        const name = r.username?.trim() || r.email || r.user_id || 'Unbekannt';
+        const key = name.toLowerCase();
+        totalCount += r.count;
+        const existing = totals.get(key);
+        if (existing) existing.count += r.count;
+        else totals.set(key, { name, count: r.count });
+      });
+
+      const scores = Array.from(totals.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      return { scores, total: totalCount };
+    }
   }
 
   const totals = new Map<string, { name: string; count: number }>();

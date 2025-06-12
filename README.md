@@ -1,6 +1,6 @@
-# Push Up Tracker
+# movementtracker
 
-This repository contains the code for a push-up counter webapp.
+This repository contains the code for a movement tracking webapp.
 ## How can I edit this code?
 
 There are several ways of editing your application.
@@ -87,6 +87,8 @@ Kopiere die Datei `.env.example` zu `.env` und fülle sie mit deinen Daten. Dana
 
 Um sicherzustellen, dass die Tabelle `sessions` alle benötigten Spalten enthält, steht das Skript `npm run ensure-schema` bereit. Dieses verwendet einen Supabase **Service Role Key** und kann fehlende Spalten automatisch anlegen. Das Skript wird beim Start von `npm run dev` automatisch ausgeführt.
 
+Neu ist die Spalte `exercise_type`, die den Typ der absolvierten Übung (z.B. `pushup` oder `squat`) speichert. Das Skript legt sie bei Bedarf ebenfalls an.
+
 Speichere dazu die Variable `SUPABASE_SERVICE_ROLE_KEY` in deiner `.env` und führe anschließend `npm run dev` aus.
 
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
@@ -97,7 +99,7 @@ Die Highscores im "Community"-Tab kannst du auch ohne Login einsehen. Darunter
 findest du zwei getrennte Formulare: eines zum Einloggen (E-Mail und Passwort)
 und eines zur Registrierung (Benutzername, E-Mail und Passwort).
 
-Seit dem neuesten Update werden in den Highscore-Tabellen neben den besten Nutzern auch die insgesamt absolvierten Liegestützen des Tages, der Woche und des Monats angezeigt.
+Seit dem neuesten Update werden in den Highscore-Tabellen neben den besten Nutzern auch die insgesamt absolvierten Liegestützen des Tages, der Woche und des Monats angezeigt. Über Pfeilsymbole kannst du zwischen den Highscores für Liegestütze und Kniebeugen wechseln.
 
 Dank der Einstellung `envPrefix` in `vite.config.ts` werden sowohl `VITE_` als
 auch `NEXT_PUBLIC_` Variablen automatisch vom Build übernommen.
@@ -107,7 +109,8 @@ Nach `npm run dev` oder `npm run build` wird Supabase für Registrierung, Login
 und Highscore-Abfragen verwendet. Melde dich im "Community"-Tab an, damit deine
 Sessions gespeichert werden. Die Highscores sind auch ohne Login sichtbar.
 Stelle sicher, dass die Tabelle `sessions` öffentlich lesbar ist oder passende
-Row-Level-Security-Regeln eingerichtet sind.
+Row-Level-Security-Regeln eingerichtet sind. Fehlen diese Rechte, wertet die
+App lediglich deine lokal gespeicherten Sessions aus.
 
 
 ### 4. Deployment
