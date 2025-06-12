@@ -78,6 +78,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [hideUnimportant, setHideUnimportant] = useState(false);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
@@ -218,6 +219,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   useEffect(() => {
     enableCamera();
   }, [enableCamera]);
+
+  // Track viewport size and disable body scroll when camera is active
+  useEffect(() => {
+    const update = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  useEffect(() => {
+    if (cameraEnabled) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [cameraEnabled]);
 
   const disableCamera = useCallback(() => {
     console.log('Disabling camera...');
@@ -466,9 +485,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           <div
             className={`bg-gray-900 overflow-hidden relative ${
               cameraEnabled
-                ? 'fixed inset-0 z-50 w-screen h-screen'
+                ? 'fixed inset-0 z-50'
                 : 'aspect-video rounded-lg max-w-xl mx-auto max-h-[50vh]'
             }`}
+            style={
+              cameraEnabled ? { width: viewport.width, height: viewport.height } : undefined
+            }
           >
             {cameraEnabled ? (
               <>
