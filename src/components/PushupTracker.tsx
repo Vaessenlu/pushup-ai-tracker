@@ -214,6 +214,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
   }, [toast]);
 
+  // Automatically enable the camera on component mount
+  useEffect(() => {
+    enableCamera();
+  }, [enableCamera]);
+
   const disableCamera = useCallback(() => {
     console.log('Disabling camera...');
     if (streamRef.current) {
@@ -458,7 +463,13 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       <div className="space-y-6">
         {/* Camera Section */}
         <div className="relative">
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative max-w-xl mx-auto max-h-[50vh]">
+          <div
+            className={`bg-gray-900 overflow-hidden relative ${
+              cameraEnabled
+                ? 'fixed inset-0 z-50 w-screen h-screen'
+                : 'aspect-video rounded-lg max-w-xl mx-auto max-h-[50vh]'
+            }`}
+          >
             {cameraEnabled ? (
               <>
                 <video
@@ -518,6 +529,15 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     <span className="text-lg font-bold">{squatCount} Squats</span>
                   </div>
                 </div>
+
+                {/* Stop Button */}
+                <Button
+                  onClick={disableCamera}
+                  variant="destructive"
+                  className="absolute bottom-4 right-4 z-10"
+                >
+                  <Square className="h-4 w-4 mr-2" /> Stop
+                </Button>
               </>
             ) : (
               <div className="flex items-center justify-center h-full text-white">
