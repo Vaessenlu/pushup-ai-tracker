@@ -56,6 +56,9 @@ export const Community: React.FC<CommunityProps> = ({ refreshTrigger, exercise }
 
   return (
     <div className="space-y-4">
+      <h2 className="text-xl font-bold text-center">
+        {exercise === 'pushup' ? 'Liegestütze' : 'Kniebeugen'}
+      </h2>
       {renderTable('Tages-Highscore', daily, dailyTotal)}
       {renderTable('Wochen-Highscore', weekly, weeklyTotal)}
       {renderTable('Monats-Highscore', monthly, monthlyTotal)}

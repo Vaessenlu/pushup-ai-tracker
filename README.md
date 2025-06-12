@@ -1,6 +1,6 @@
-# Push Up Tracker
+# movementtracker
 
-This repository contains the code for a push-up counter webapp.
+This repository contains the code for a movement tracking webapp.
 ## How can I edit this code?
 
 There are several ways of editing your application.

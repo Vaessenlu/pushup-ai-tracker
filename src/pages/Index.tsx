@@ -237,11 +237,11 @@ const Index: React.FC<IndexProps> = ({ user }) => {
               <Activity className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent">
-              Push Up Tracker
+              movementtracker
             </h1>
           </div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Zähle deine Liegestützen automatisch und verfolge deine Fortschritte.
+            Zähle deine Übungen automatisch und verfolge deine Fortschritte.
           </p>
         </div>
 
