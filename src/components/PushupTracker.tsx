@@ -215,33 +215,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
   }, [toast]);
 
-  // Automatically enable the camera on component mount
-  useEffect(() => {
-    enableCamera();
-  }, [enableCamera]);
 
-  // Request fullscreen and lock scrolling when the camera is active
-  useEffect(() => {
-    if (cameraEnabled) {
-      if (overlayRef.current && document.fullscreenElement == null) {
-        overlayRef.current.requestFullscreen?.().catch((err) => {
-          console.error('Failed to enter fullscreen', err);
-        });
-      }
-      document.body.style.overflow = 'hidden';
-    } else {
-      if (document.fullscreenElement) {
-        document.exitFullscreen?.().catch((err) => {
-          console.error('Failed to exit fullscreen', err);
-        });
-      }
-      document.body.style.overflow = '';
-    }
-  }, [cameraEnabled]);
 
 
   const disableCamera = useCallback(() => {
     console.log('Disabling camera...');
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(err => {
+        console.error('Failed to exit fullscreen', err);
+      });
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -286,6 +269,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     startTimeRef.current = Date.now();
     setIsTracking(true);
     setStatus('tracking');
+
+    if (overlayRef.current && document.fullscreenElement == null) {
+      overlayRef.current.requestFullscreen?.().catch(err => {
+        console.error('Failed to enter fullscreen', err);
+      });
+    }
     
     toast({
       title: "Tracking gestartet",
