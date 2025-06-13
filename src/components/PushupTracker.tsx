@@ -20,23 +20,44 @@ import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
 import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
-let drawConnectors: typeof import('@mediapipe/drawing_utils').drawConnectors | undefined;
-let drawLandmarks: typeof import('@mediapipe/drawing_utils').drawLandmarks | undefined;
 
-// Load drawing utils dynamically to avoid tree-shaking issues
-import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: unknown) => {
-  // Dynamic module may have different shapes
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = mod as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const utils =
-    m.drawingUtils ??
-    m.default ??
-    (globalThis as Record<string, unknown>).drawingUtils ??
-    m;
-  drawConnectors = utils.drawConnectors;
-  drawLandmarks = utils.drawLandmarks;
-});
+// Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
+function drawCustomConnectors(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  connections: readonly [number, number][],
+  color: string,
+  lineWidth: number,
+  canvas: HTMLCanvasElement
+) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  connections.forEach(([a, b]) => {
+    const pa = landmarks[a];
+    const pb = landmarks[b];
+    if (!pa || !pb) return;
+    ctx.beginPath();
+    ctx.moveTo(pa.x * canvas.width, pa.y * canvas.height);
+    ctx.lineTo(pb.x * canvas.width, pb.y * canvas.height);
+    ctx.stroke();
+  });
+}
+
+function drawCustomLandmarks(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  color: string,
+  radius: number,
+  canvas: HTMLCanvasElement
+) {
+  ctx.fillStyle = color;
+  landmarks.forEach((lm) => {
+    ctx.beginPath();
+    ctx.arc(lm.x * canvas.width, lm.y * canvas.height, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
 import { PushupDetector, UNIMPORTANT_LANDMARKS } from '@/lib/PushupDetector';
 import { SquatDetector } from '@/lib/SquatDetector';
@@ -415,19 +436,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
           : mirroredPose;
 
-        if (drawConnectors && drawLandmarks) {
-          if (showLines) {
-            drawConnectors(ctx, mirroredPose, connections, {
-              color: '#00FF00',
-              lineWidth: 3,
-            });
-          }
-          drawLandmarks(ctx, landmarksToDraw, {
-            color: '#00FF00',
-            lineWidth: 2,
-            radius: 5,
-          });
+        if (showLines) {
+          drawCustomConnectors(ctx, mirroredPose, connections, '#00FF00', 5, canvas);
         }
+        drawCustomLandmarks(ctx, landmarksToDraw, '#00FF00', 8, canvas);
 
         if (showAngles) {
           const calculateAngle = (
