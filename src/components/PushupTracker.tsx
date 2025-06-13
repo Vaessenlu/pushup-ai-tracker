@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,6 +61,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<PushupDetector | null>(null);
   const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
@@ -81,6 +82,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   
   const { toast } = useToast();
 
@@ -89,6 +91,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Track viewport size to size the overlay correctly
+  useLayoutEffect(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
 
   // Initialize pose detector
   useEffect(() => {
@@ -218,6 +230,25 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   useEffect(() => {
     enableCamera();
   }, [enableCamera]);
+
+  // Request fullscreen and lock scrolling when the camera is active
+  useEffect(() => {
+    if (cameraEnabled) {
+      if (overlayRef.current && document.fullscreenElement == null) {
+        overlayRef.current.requestFullscreen?.().catch((err) => {
+          console.error('Failed to enter fullscreen', err);
+        });
+      }
+      document.body.style.overflow = 'hidden';
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch((err) => {
+          console.error('Failed to exit fullscreen', err);
+        });
+      }
+      document.body.style.overflow = '';
+    }
+  }, [cameraEnabled]);
 
 
   const disableCamera = useCallback(() => {
@@ -465,9 +496,13 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         {/* Camera Section */}
         <div className="relative">
           <div
+            ref={overlayRef}
+            style={
+              cameraEnabled ? { width: viewport.width, height: viewport.height } : undefined
+            }
             className={`bg-gray-900 overflow-hidden relative ${
               cameraEnabled
-                ? 'fixed inset-0 z-50 w-screen h-[100dvh]'
+                ? 'fixed inset-0 z-50'
                 : 'aspect-video rounded-lg max-w-xl mx-auto max-h-[50vh]'
             }`}
           >
