@@ -61,6 +61,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<PushupDetector | null>(null);
   const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
@@ -81,8 +82,26 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   
   const { toast } = useToast();
+
+  useEffect(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (cameraEnabled && overlayRef.current && !document.fullscreenElement) {
+      overlayRef.current
+        .requestFullscreen()
+        .catch((err) => console.error('Failed to enter fullscreen', err));
+    }
+  }, [cameraEnabled]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -214,6 +233,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
   }, [toast]);
 
+
+
+
   const disableCamera = useCallback(() => {
     console.log('Disabling camera...');
     if (streamRef.current) {
@@ -225,6 +247,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+    }
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch((err) => {
+        console.error('Failed to exit fullscreen', err);
+      });
     }
     setCameraEnabled(false);
     setVideoReady(false);
@@ -251,6 +278,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         description: "Das Pose-Modell wird mit dem ersten Frame geladen.",
       });
     }
+
 
     detectorRef.current?.reset();
     squatDetectorRef.current?.reset();
@@ -458,7 +486,15 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       <div className="space-y-6">
         {/* Camera Section */}
         <div className="relative">
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative max-w-xl mx-auto max-h-[50vh]">
+          <div
+            ref={overlayRef}
+            className={`bg-gray-900 overflow-hidden relative ${
+              cameraEnabled
+                ? 'fixed inset-0 z-50'
+                : 'aspect-video rounded-lg max-w-xl mx-auto max-h-[50vh]'
+            }`}
+            style={cameraEnabled ? { width: viewport.width, height: viewport.height } : undefined}
+          >
             {cameraEnabled ? (
               <>
                 <video
@@ -508,7 +544,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     </Badge>
                   )}
                 </div>
-                
+
                 {/* Count Display */}
                 <div className="absolute top-4 right-4 space-y-2 text-right">
                   <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-1 rounded-full">
@@ -518,6 +554,36 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     <span className="text-lg font-bold">{squatCount} Squats</span>
                   </div>
                 </div>
+
+                {/* Pose Controls */}
+                <div className="absolute bottom-4 left-4 space-y-2 bg-black/60 p-3 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      {showSkeleton ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      <span className="text-sm">Pose-Erkennung</span>
+                    </div>
+                    <Switch checked={showSkeleton} onCheckedChange={setShowSkeleton} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Slash className="h-4 w-4" />
+                      <span className="text-sm">Unwichtige Punkte</span>
+                    </div>
+                    <Switch checked={hideUnimportant} onCheckedChange={setHideUnimportant} />
+                  </div>
+                </div>
+
+                {/* Stop Button */}
+                <Button
+                  onClick={() => {
+                    stopTracking();
+                    disableCamera();
+                  }}
+                  variant="destructive"
+                  className="absolute bottom-4 right-4 z-10"
+                >
+                  <Square className="h-4 w-4 mr-2" /> Stop
+                </Button>
               </>
             ) : (
               <div className="flex items-center justify-center h-full text-white">
@@ -573,33 +639,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               </div>
             )}
 
-            {/* Skeleton Toggle */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2">
-                {showSkeleton ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                <label className="text-sm font-medium text-gray-700">
-                  Pose-Erkennung anzeigen
-                </label>
-              </div>
-              <Switch
-                checked={showSkeleton}
-                onCheckedChange={setShowSkeleton}
-              />
-            </div>
-
-            {/* Hide Unimportant Points Toggle */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Slash className="h-4 w-4" />
-                <label className="text-sm font-medium text-gray-700">
-                  Unwichtige Punkte ausblenden
-                </label>
-              </div>
-              <Switch
-                checked={hideUnimportant}
-                onCheckedChange={setHideUnimportant}
-              />
-            </div>
           </div>
         )}
 
