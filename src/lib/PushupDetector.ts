@@ -65,17 +65,18 @@ export class PushupDetector {
   private count = 0;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
-  private upAngleThreshold = 140;
-  private downAngleThreshold = 95;
+  private upAngleThreshold = 160;
+  private downAngleThreshold = 100;
   private lastAvgAngle = 0;
+  private smoothedAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor(
     requiredUpFrames = 3,
-    upAngleThreshold = 140,
-    downAngleThreshold = 95
+    upAngleThreshold = 160,
+    downAngleThreshold = 100
   ) {
     this.requiredUpFrames = requiredUpFrames;
     this.upAngleThreshold = upAngleThreshold;
@@ -177,10 +178,14 @@ export class PushupDetector {
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    this.lastAvgAngle = avgAngle;
+    // Apply simple smoothing to reduce jitter
+    this.smoothedAngle = this.smoothedAngle * 0.8 + avgAngle * 0.2;
+    this.lastAvgAngle = this.smoothedAngle;
 
-    const isUpFrame = avgAngle > this.upAngleThreshold;
-    const isDownFrame = avgAngle < this.downAngleThreshold;
+    const isUpFrame =
+      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
+    const isDownFrame =
+      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
@@ -216,6 +221,8 @@ export class PushupDetector {
     this.state = PushupState.Unknown;
     this.consecutiveUpFrames = 0;
     this.landmarks = null;
+    this.lastAvgAngle = 0;
+    this.smoothedAngle = 0;
   }
 
   getCount() {
