@@ -28,17 +28,24 @@ function drawCustomConnectors(
   connections: readonly [number, number][],
   color: string,
   lineWidth: number,
-  canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement,
+  videoWidth: number,
+  videoHeight: number
 ) {
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
+
+  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
+  const offsetX = (videoWidth * scale - canvas.width) / 2;
+  const offsetY = (videoHeight * scale - canvas.height) / 2;
+
   connections.forEach(([a, b]) => {
     const pa = landmarks[a];
     const pb = landmarks[b];
     if (!pa || !pb) return;
     ctx.beginPath();
-    ctx.moveTo(pa.x * canvas.width, pa.y * canvas.height);
-    ctx.lineTo(pb.x * canvas.width, pb.y * canvas.height);
+    ctx.moveTo(pa.x * videoWidth * scale - offsetX, pa.y * videoHeight * scale - offsetY);
+    ctx.lineTo(pb.x * videoWidth * scale - offsetX, pb.y * videoHeight * scale - offsetY);
     ctx.stroke();
   });
 }
@@ -48,12 +55,25 @@ function drawCustomLandmarks(
   landmarks: NormalizedLandmark[],
   color: string,
   radius: number,
-  canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement,
+  videoWidth: number,
+  videoHeight: number
 ) {
   ctx.fillStyle = color;
+
+  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
+  const offsetX = (videoWidth * scale - canvas.width) / 2;
+  const offsetY = (videoHeight * scale - canvas.height) / 2;
+
   landmarks.forEach((lm) => {
     ctx.beginPath();
-    ctx.arc(lm.x * canvas.width, lm.y * canvas.height, radius, 0, Math.PI * 2);
+    ctx.arc(
+      lm.x * videoWidth * scale - offsetX,
+      lm.y * videoHeight * scale - offsetY,
+      radius,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
   });
 }
@@ -156,11 +176,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
       setVideoReady(true);
       
-      // Update canvas size immediately
-      if (canvasRef.current) {
-        canvasRef.current.width = video.videoWidth;
-        canvasRef.current.height = video.videoHeight;
-        console.log('Canvas size set to:', video.videoWidth, 'x', video.videoHeight);
+      if (canvasRef.current && overlayRef.current) {
+        const rect = overlayRef.current.getBoundingClientRect();
+        canvasRef.current.width = rect.width;
+        canvasRef.current.height = rect.height;
+        console.log('Canvas size set to:', rect.width, 'x', rect.height);
       }
       
       toast({
@@ -417,9 +437,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         if (!ctx) return;
 
         const canvas = canvasRef.current;
-        if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
-          canvas.width = videoDimensions.width;
-          canvas.height = videoDimensions.height;
+        const { clientWidth, clientHeight } = canvas;
+        if (canvas.width !== clientWidth || canvas.height !== clientHeight) {
+          canvas.width = clientWidth;
+          canvas.height = clientHeight;
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -436,10 +457,34 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
           : mirroredPose;
 
+        const scale = Math.max(
+          canvas.width / videoDimensions.width,
+          canvas.height / videoDimensions.height
+        );
+        const offsetX = (videoDimensions.width * scale - canvas.width) / 2;
+        const offsetY = (videoDimensions.height * scale - canvas.height) / 2;
+
         if (showLines) {
-          drawCustomConnectors(ctx, mirroredPose, connections, '#00FF00', 5, canvas);
+          drawCustomConnectors(
+            ctx,
+            mirroredPose,
+            connections,
+            '#00FF00',
+            5,
+            canvas,
+            videoDimensions.width,
+            videoDimensions.height
+          );
         }
-        drawCustomLandmarks(ctx, landmarksToDraw, '#00FF00', 8, canvas);
+        drawCustomLandmarks(
+          ctx,
+          landmarksToDraw,
+          '#00FF00',
+          8,
+          canvas,
+          videoDimensions.width,
+          videoDimensions.height
+        );
 
         if (showAngles) {
           const calculateAngle = (
@@ -471,13 +516,13 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           ctx.font = '10px Arial';
           ctx.fillText(
             `${Math.round(leftAngle)}`,
-            mirroredPose[13].x * canvas.width + 4,
-            mirroredPose[13].y * canvas.height - 4
+            mirroredPose[13].x * videoDimensions.width * scale - offsetX + 4,
+            mirroredPose[13].y * videoDimensions.height * scale - offsetY - 4
           );
           ctx.fillText(
             `${Math.round(rightAngle)}`,
-            mirroredPose[14].x * canvas.width + 4,
-            mirroredPose[14].y * canvas.height - 4
+            mirroredPose[14].x * videoDimensions.width * scale - offsetX + 4,
+            mirroredPose[14].y * videoDimensions.height * scale - offsetY - 4
           );
         }
 
