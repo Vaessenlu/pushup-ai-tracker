@@ -554,7 +554,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
                 {/* Stop Button */}
                 <Button
-                  onClick={disableCamera}
+                  onClick={() => {
+                    stopTracking();
+                    disableCamera();
+                  }}
                   variant="destructive"
                   className="absolute bottom-4 right-4 z-10"
                 >
