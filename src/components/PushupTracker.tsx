@@ -19,7 +19,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
-import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
 let drawConnectors: typeof import('@mediapipe/drawing_utils').drawConnectors | undefined;
 let drawLandmarks: typeof import('@mediapipe/drawing_utils').drawLandmarks | undefined;
 
@@ -78,7 +78,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
   const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
-  const [hideUnimportant, setHideUnimportant] = useState(false);
+  const [showRelevantPoints, setShowRelevantPoints] = useState(false);
+  const [showLines, setShowLines] = useState(true);
+  const [showAngles, setShowAngles] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
@@ -407,42 +409,68 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
         const mirroredPose = pose.map((lm) => ({ ...lm, x: 1 - lm.x }));
 
-        const connections = hideUnimportant
+        const connections = showRelevantPoints
           ? POSE_CONNECTIONS.filter(([a, b]) =>
               !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
             )
           : POSE_CONNECTIONS;
 
-        const landmarksToDraw = hideUnimportant
+        const landmarksToDraw = showRelevantPoints
           ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
           : mirroredPose;
 
         if (drawConnectors && drawLandmarks) {
-          drawConnectors(ctx, mirroredPose, connections, {
-            color: '#00FF00',
-            lineWidth: 3,
-          });
-          drawLandmarks(ctx, landmarksToDraw, {
-            color: '#FF0000',
-            lineWidth: 2,
-          });
+          if (showLines) {
+            drawConnectors(ctx, mirroredPose, connections, {
+              color: '#00FF00',
+              lineWidth: 3,
+            });
+          }
+          if (showRelevantPoints) {
+            drawLandmarks(ctx, landmarksToDraw, {
+              color: '#00FF00',
+              lineWidth: 2,
+            });
+          }
         }
 
-        mirroredPose.forEach((lm, idx) => {
-          if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
-          const x = lm.x * canvas.width;
-          const y = lm.y * canvas.height;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '10px Arial';
-          ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
-        });
+        if (showAngles) {
+          const calculateAngle = (
+            a: NormalizedLandmark,
+            b: NormalizedLandmark,
+            c: NormalizedLandmark
+          ) => {
+            const ab = { x: a.x - b.x, y: a.y - b.y };
+            const cb = { x: c.x - b.x, y: c.y - b.y };
+            const dot = ab.x * cb.x + ab.y * cb.y;
+            const magAB = Math.hypot(ab.x, ab.y);
+            const magCB = Math.hypot(cb.x, cb.y);
+            const angle = Math.acos(dot / (magAB * magCB));
+            return (angle * 180) / Math.PI;
+          };
 
-        if (drawLandmarks) {
-          [11, 12].forEach((i) =>
-            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#FF00FF', radius: 6 })
+          const leftAngle = calculateAngle(
+            mirroredPose[11],
+            mirroredPose[13],
+            mirroredPose[15]
           );
-          [23, 24].forEach((i) =>
-            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#00FFFF', radius: 6 })
+          const rightAngle = calculateAngle(
+            mirroredPose[12],
+            mirroredPose[14],
+            mirroredPose[16]
+          );
+
+          ctx.fillStyle = '#00FF00';
+          ctx.font = '10px Arial';
+          ctx.fillText(
+            `${Math.round(leftAngle)}`,
+            mirroredPose[13].x * canvas.width + 4,
+            mirroredPose[13].y * canvas.height - 4
+          );
+          ctx.fillText(
+            `${Math.round(rightAngle)}`,
+            mirroredPose[14].x * canvas.width + 4,
+            mirroredPose[14].y * canvas.height - 4
           );
         }
 
@@ -465,7 +493,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [showSkeleton, videoDimensions, hideUnimportant, modelReady]);
+  }, [showSkeleton, videoDimensions, showRelevantPoints, showLines, showAngles, modelReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -567,9 +595,23 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                       <Slash className="h-4 w-4" />
-                      <span className="text-sm">Unwichtige Punkte</span>
+                      <span className="text-sm">Relevante Punkte</span>
                     </div>
-                    <Switch checked={hideUnimportant} onCheckedChange={setHideUnimportant} />
+                    <Switch checked={showRelevantPoints} onCheckedChange={setShowRelevantPoints} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Slash className="h-4 w-4" />
+                      <span className="text-sm">Linien</span>
+                    </div>
+                    <Switch checked={showLines} onCheckedChange={setShowLines} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Slash className="h-4 w-4" />
+                      <span className="text-sm">Winkel</span>
+                    </div>
+                    <Switch checked={showAngles} onCheckedChange={setShowAngles} />
                   </div>
                 </div>
 
@@ -728,9 +770,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Warte bis das Pose-Modell geladen ist (Status: "Model: Bereit")</li>
             <li>• Nutze den Zoom-Slider um die Kameraansicht anzupassen</li>
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
-            <li>• Rote/gelbe Punkte zeigen erkannte Körperteile, grüne Linien das Skelett</li>
-            <li>• Magenta Punkte = Schultern, Cyan Punkte = Hüfte (wichtig für Liegestützen)</li>
-            <li>• Aktivere "Unwichtige Punkte ausblenden" um Gesicht und Finger zu verbergen</li>
+            <li>• Grüne Punkte markieren erkannte Körperteile</li>
+            <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
             <li>• Gezählt wird nur, wenn mindestens ein Beinpunkt (Knie oder Fuß) sichtbar ist</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
