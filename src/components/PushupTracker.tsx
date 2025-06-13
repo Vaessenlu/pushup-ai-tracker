@@ -38,11 +38,7 @@ import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: unknown) => {
   drawLandmarks = utils.drawLandmarks;
 });
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
-import {
-  PushupDetector,
-  POSE_LANDMARK_NAMES,
-  UNIMPORTANT_LANDMARKS
-} from '@/lib/PushupDetector';
+import { PushupDetector, UNIMPORTANT_LANDMARKS } from '@/lib/PushupDetector';
 import { SquatDetector } from '@/lib/SquatDetector';
 
 interface PushupTrackerProps {
@@ -429,6 +425,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           drawLandmarks(ctx, landmarksToDraw, {
             color: '#00FF00',
             lineWidth: 2,
+            radius: 5,
           });
         }
 
