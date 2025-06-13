@@ -53,7 +53,7 @@ export const UNIMPORTANT_LANDMARKS = [
 ];
 
 export enum PushupState {
-  WaitingForUp,
+  Unknown,
   Up,
   Down,
 }
@@ -61,7 +61,7 @@ export enum PushupState {
 export class PushupDetector {
   private pose: PoseInstance | null = null;
   private initPromise: Promise<void>;
-  private state: PushupState = PushupState.WaitingForUp;
+  private state: PushupState = PushupState.Unknown;
   private count = 0;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
@@ -72,7 +72,7 @@ export class PushupDetector {
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor(
-    requiredUpFrames = 5,
+    requiredUpFrames = 3,
     upAngleThreshold = 140,
     downAngleThreshold = 95
   ) {
@@ -186,11 +186,9 @@ export class PushupDetector {
     }
 
     switch (this.state) {
-      case PushupState.WaitingForUp: {
-        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
-          this.state = PushupState.Up;
-          this.consecutiveUpFrames = 0;
-        }
+      case PushupState.Unknown: {
+        this.state = isUpFrame ? PushupState.Up : PushupState.Down;
+        this.consecutiveUpFrames = 0;
         break;
       }
       case PushupState.Up: {
@@ -212,7 +210,7 @@ export class PushupDetector {
 
   reset() {
     this.count = 0;
-    this.state = PushupState.WaitingForUp;
+    this.state = PushupState.Unknown;
     this.consecutiveUpFrames = 0;
     this.landmarks = null;
   }
