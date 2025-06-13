@@ -426,12 +426,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               lineWidth: 3,
             });
           }
-          if (showRelevantPoints) {
-            drawLandmarks(ctx, landmarksToDraw, {
-              color: '#00FF00',
-              lineWidth: 2,
-            });
-          }
+          drawLandmarks(ctx, landmarksToDraw, {
+            color: '#00FF00',
+            lineWidth: 2,
+          });
         }
 
         if (showAngles) {
