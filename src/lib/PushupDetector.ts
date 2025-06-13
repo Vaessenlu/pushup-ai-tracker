@@ -63,7 +63,6 @@ export class PushupDetector {
   private initPromise: Promise<void>;
   private state: PushupState = PushupState.WaitingForUp;
   private count = 0;
-  private legSeen = false;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
@@ -179,8 +178,8 @@ export class PushupDetector {
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    const isUpFrame = avgAngle > 160 && legVisible;
-    const isDownFrame = avgAngle < 100;
+    const isUpFrame = avgAngle > 150;
+    const isDownFrame = avgAngle < 110;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
@@ -197,19 +196,15 @@ export class PushupDetector {
         break;
       }
       case PushupState.Up: {
-        if (isDownFrame && legVisible) {
+        if (isDownFrame) {
           this.state = PushupState.Down;
-          this.legSeen = true;
         }
         break;
       }
       case PushupState.Down: {
         if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
           this.state = PushupState.Up;
-          if (this.legSeen) {
-            this.count++;
-          }
-          this.legSeen = false;
+          this.count++;
           this.consecutiveUpFrames = 0;
         }
         break;
@@ -220,7 +215,6 @@ export class PushupDetector {
   reset() {
     this.count = 0;
     this.state = PushupState.WaitingForUp;
-    this.legSeen = false;
     this.consecutiveUpFrames = 0;
     this.landmarks = null;
   }
