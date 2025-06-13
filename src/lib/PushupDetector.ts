@@ -67,6 +67,7 @@ export class PushupDetector {
   private requiredUpFrames: number;
   private upAngleThreshold = 140;
   private downAngleThreshold = 95;
+  private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
@@ -176,6 +177,8 @@ export class PushupDetector {
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
+    this.lastAvgAngle = avgAngle;
+
     const isUpFrame = avgAngle > this.upAngleThreshold;
     const isDownFrame = avgAngle < this.downAngleThreshold;
 
@@ -221,6 +224,22 @@ export class PushupDetector {
 
   getLandmarks() {
     return this.landmarks;
+  }
+
+  getState() {
+    return this.state;
+  }
+
+  getLastAngle() {
+    return this.lastAvgAngle;
+  }
+
+  getUpAngleThreshold() {
+    return this.upAngleThreshold;
+  }
+
+  getDownAngleThreshold() {
+    return this.downAngleThreshold;
   }
 
   isReady() {

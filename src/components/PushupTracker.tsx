@@ -21,6 +21,24 @@ import { Session } from '@/pages/Index';
 
 import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
 
+type PoseKind = 'pushup' | 'squat' | 'unknown';
+
+function classifyPose(landmarks: NormalizedLandmark[] | null): PoseKind {
+  if (!landmarks) return 'unknown';
+  const ls = landmarks[11];
+  const rs = landmarks[12];
+  const lh = landmarks[23];
+  const rh = landmarks[24];
+  if (!ls || !rs || !lh || !rh) return 'unknown';
+  const shoulder = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
+  const hip = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
+  const vertical = Math.abs(hip.y - shoulder.y);
+  const horizontal = Math.abs(hip.x - shoulder.x);
+  if (vertical > horizontal * 1.2) return 'squat';
+  if (horizontal > vertical * 1.2) return 'pushup';
+  return 'unknown';
+}
+
 // Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
 function drawCustomConnectors(
   ctx: CanvasRenderingContext2D,
@@ -79,8 +97,8 @@ function drawCustomLandmarks(
 }
 
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
-import { PushupDetector, UNIMPORTANT_LANDMARKS } from '@/lib/PushupDetector';
-import { SquatDetector } from '@/lib/SquatDetector';
+import { PushupDetector, UNIMPORTANT_LANDMARKS, PushupState } from '@/lib/PushupDetector';
+import { SquatDetector, SquatState } from '@/lib/SquatDetector';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
@@ -122,6 +140,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [poseType, setPoseType] = useState<PoseKind>('unknown');
+  const [heightFeedback, setHeightFeedback] = useState('');
   
   const { toast } = useToast();
 
@@ -400,9 +420,40 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             setSessionTime(currentTime);
           }
 
-          // Update pose results for skeleton drawing and model status
-          setPoseResults(detectorRef.current.getLandmarks());
+          const landmarks = detectorRef.current.getLandmarks();
+          setPoseResults(landmarks);
           setModelReady(detectorRef.current.isReady());
+
+          const type = classifyPose(landmarks);
+          setPoseType(type);
+          if (type === 'pushup') {
+            const state = detectorRef.current.getState();
+            const angle = detectorRef.current.getLastAngle();
+            const upT = detectorRef.current.getUpAngleThreshold();
+            const downT = detectorRef.current.getDownAngleThreshold();
+            if (state === PushupState.Down) {
+              setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
+            } else if (state === PushupState.Up) {
+              setHeightFeedback(angle > upT ? 'Hoch genug' : 'Höher');
+            } else {
+              setHeightFeedback('');
+            }
+          } else if (type === 'squat') {
+            const sDet = squatDetectorRef.current;
+            const state = sDet.getState();
+            const angle = sDet.getLastAngle();
+            const upT = sDet.getUpAngleThreshold();
+            const downT = sDet.getDownAngleThreshold();
+            if (state === SquatState.Down) {
+              setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
+            } else if (state === SquatState.Up) {
+              setHeightFeedback(angle > upT ? 'Hoch genug' : 'Höher');
+            } else {
+              setHeightFeedback('');
+            }
+          } else {
+            setHeightFeedback('');
+          }
         }
 
         animationRef.current = requestAnimationFrame(animate);
@@ -618,6 +669,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant="outline" className="bg-white/90">
                     Skelett: {showSkeleton ? 'AN' : 'AUS'}
                   </Badge>
+                  {poseType !== 'unknown' && (
+                    <Badge variant="outline" className="bg-white/90">
+                      Pose: {poseType === 'pushup' ? 'Liegestütz' : 'Kniebeuge'}
+                    </Badge>
+                  )}
+                  {heightFeedback && (
+                    <Badge variant="outline" className="bg-white/90">
+                      {heightFeedback}
+                    </Badge>
+                  )}
                   {isTracking && (
                     <Badge variant="outline" className="bg-white/90">
                       Zeit: {formatTime(sessionTime)}

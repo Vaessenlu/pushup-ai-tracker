@@ -6,13 +6,22 @@ import type {
   NormalizedLandmarkList
 } from '@mediapipe/pose';
 
+export enum SquatState {
+  Unknown,
+  Up,
+  Down,
+}
+
 export class SquatDetector {
   private pose: Pose | null = null;
   private initPromise: Promise<void>;
-  private isDown = false;
+  private state: SquatState = SquatState.Unknown;
   private count = 0;
+  private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
+  private upAngleThreshold = 160;
+  private downAngleThreshold = 100;
 
   constructor() {
     this.initPromise = this.initPose();
@@ -79,24 +88,51 @@ export class SquatDetector {
     const rightAngle = this.angle(rightHip, rightKnee, rightAnkle);
     const avg = (leftAngle + rightAngle) / 2;
 
-    if (avg < 100 && !this.isDown) {
-      this.isDown = true;
-    }
+    this.lastAvgAngle = avg;
 
-    if (avg > 160 && this.isDown) {
-      this.isDown = false;
-      this.count++;
+    switch (this.state) {
+      case SquatState.Unknown:
+        this.state = avg > this.upAngleThreshold ? SquatState.Up : SquatState.Down;
+        break;
+      case SquatState.Up:
+        if (avg < this.downAngleThreshold) {
+          this.state = SquatState.Down;
+        }
+        break;
+      case SquatState.Down:
+        if (avg > this.upAngleThreshold) {
+          this.state = SquatState.Up;
+          this.count++;
+        }
+        break;
     }
   }
 
   reset() {
     this.count = 0;
-    this.isDown = false;
+    this.state = SquatState.Unknown;
     this.landmarks = null;
+    this.lastAvgAngle = 0;
   }
 
   getCount() {
     return this.count;
+  }
+
+  getState() {
+    return this.state;
+  }
+
+  getLastAngle() {
+    return this.lastAvgAngle;
+  }
+
+  getUpAngleThreshold() {
+    return this.upAngleThreshold;
+  }
+
+  getDownAngleThreshold() {
+    return this.downAngleThreshold;
   }
 
   getLandmarks() {
