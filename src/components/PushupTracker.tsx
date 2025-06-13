@@ -61,6 +61,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<PushupDetector | null>(null);
   const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
@@ -229,6 +230,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch((err) => {
+        console.error('Failed to exit fullscreen', err);
+      });
+    }
     setCameraEnabled(false);
     setVideoReady(false);
     setCameraZoomSupported(false);
@@ -253,6 +259,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         title: "Modell initialisiert",
         description: "Das Pose-Modell wird mit dem ersten Frame geladen.",
       });
+    }
+
+    if (overlayRef.current && !document.fullscreenElement) {
+      overlayRef.current
+        .requestFullscreen()
+        .catch((err) => console.error('Failed to enter fullscreen', err));
     }
 
     detectorRef.current?.reset();
@@ -462,6 +474,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         {/* Camera Section */}
         <div className="relative">
           <div
+            ref={overlayRef}
             className={`bg-gray-900 overflow-hidden relative ${
               cameraEnabled
                 ? 'fixed inset-0 z-50 w-screen h-screen'
