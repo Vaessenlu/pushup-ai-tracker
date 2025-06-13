@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -82,7 +82,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
-  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   
   const { toast } = useToast();
 
@@ -91,16 +90,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Track viewport size to size the overlay correctly
-  useLayoutEffect(() => {
-    const updateViewport = () => {
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
-    };
-    updateViewport();
-    window.addEventListener('resize', updateViewport);
-    return () => window.removeEventListener('resize', updateViewport);
-  }, []);
 
   // Initialize pose detector
   useEffect(() => {
@@ -497,12 +486,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         <div className="relative">
           <div
             ref={overlayRef}
-            style={
-              cameraEnabled ? { width: viewport.width, height: viewport.height } : undefined
-            }
             className={`bg-gray-900 overflow-hidden relative ${
               cameraEnabled
-                ? 'fixed inset-0 z-50'
+                ? 'fixed inset-0 z-50 w-screen h-screen'
                 : 'aspect-video rounded-lg max-w-xl mx-auto max-h-[50vh]'
             }`}
           >
