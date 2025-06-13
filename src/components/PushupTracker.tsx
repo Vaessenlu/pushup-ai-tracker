@@ -61,7 +61,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<PushupDetector | null>(null);
   const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
@@ -220,11 +219,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
   const disableCamera = useCallback(() => {
     console.log('Disabling camera...');
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(err => {
-        console.error('Failed to exit fullscreen', err);
-      });
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -269,12 +263,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     startTimeRef.current = Date.now();
     setIsTracking(true);
     setStatus('tracking');
-
-    if (overlayRef.current && document.fullscreenElement == null) {
-      overlayRef.current.requestFullscreen?.().catch(err => {
-        console.error('Failed to enter fullscreen', err);
-      });
-    }
     
     toast({
       title: "Tracking gestartet",
@@ -474,7 +462,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         {/* Camera Section */}
         <div className="relative">
           <div
-            ref={overlayRef}
             className={`bg-gray-900 overflow-hidden relative ${
               cameraEnabled
                 ? 'fixed inset-0 z-50 w-screen h-screen'
