@@ -824,8 +824,8 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
             <li>• Grüne Punkte markieren erkannte Körperteile</li>
             <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
-            <li>• Gezählt wird nur, wenn mindestens ein Beinpunkt (Knie oder Fuß) sichtbar ist</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
+            <li>• Die Zählung erfolgt, sobald eine vollständige Auf- und Abbewegung erkannt wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>
         </div>

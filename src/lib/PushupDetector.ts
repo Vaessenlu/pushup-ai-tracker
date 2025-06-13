@@ -65,12 +65,20 @@ export class PushupDetector {
   private count = 0;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
+  private upAngleThreshold = 140;
+  private downAngleThreshold = 95;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
-  constructor(requiredUpFrames = 5) {
+  constructor(
+    requiredUpFrames = 5,
+    upAngleThreshold = 140,
+    downAngleThreshold = 95
+  ) {
     this.requiredUpFrames = requiredUpFrames;
+    this.upAngleThreshold = upAngleThreshold;
+    this.downAngleThreshold = downAngleThreshold;
     this.initPromise = this.initPose();
   }
 
@@ -163,23 +171,13 @@ export class PushupDetector {
       return;
     }
 
-    const legVisible = [
-      leftHip,
-      rightHip,
-      leftKnee,
-      rightKnee,
-      leftAnkle,
-      rightAnkle,
-      leftFoot,
-      rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > 0.3);
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    const isUpFrame = avgAngle > 150;
-    const isDownFrame = avgAngle < 110;
+    const isUpFrame = avgAngle > this.upAngleThreshold;
+    const isDownFrame = avgAngle < this.downAngleThreshold;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
