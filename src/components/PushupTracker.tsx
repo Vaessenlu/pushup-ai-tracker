@@ -19,31 +19,86 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 
-import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
-let drawConnectors: typeof import('@mediapipe/drawing_utils').drawConnectors | undefined;
-let drawLandmarks: typeof import('@mediapipe/drawing_utils').drawLandmarks | undefined;
+import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
 
-// Load drawing utils dynamically to avoid tree-shaking issues
-import('@mediapipe/drawing_utils/drawing_utils.js').then((mod: unknown) => {
-  // Dynamic module may have different shapes
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = mod as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const utils =
-    m.drawingUtils ??
-    m.default ??
-    (globalThis as Record<string, unknown>).drawingUtils ??
-    m;
-  drawConnectors = utils.drawConnectors;
-  drawLandmarks = utils.drawLandmarks;
-});
+type PoseKind = 'pushup' | 'squat' | 'unknown';
+
+function classifyPose(landmarks: NormalizedLandmark[] | null): PoseKind {
+  if (!landmarks) return 'unknown';
+  const ls = landmarks[11];
+  const rs = landmarks[12];
+  const lh = landmarks[23];
+  const rh = landmarks[24];
+  if (!ls || !rs || !lh || !rh) return 'unknown';
+  const shoulder = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
+  const hip = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
+  const vertical = Math.abs(hip.y - shoulder.y);
+  const horizontal = Math.abs(hip.x - shoulder.x);
+  if (vertical > horizontal * 1.2) return 'squat';
+  if (horizontal > vertical * 1.2) return 'pushup';
+  return 'unknown';
+}
+
+// Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
+function drawCustomConnectors(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  connections: readonly [number, number][],
+  color: string,
+  lineWidth: number,
+  canvas: HTMLCanvasElement,
+  videoWidth: number,
+  videoHeight: number
+) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+
+  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
+  const offsetX = (videoWidth * scale - canvas.width) / 2;
+  const offsetY = (videoHeight * scale - canvas.height) / 2;
+
+  connections.forEach(([a, b]) => {
+    const pa = landmarks[a];
+    const pb = landmarks[b];
+    if (!pa || !pb) return;
+    ctx.beginPath();
+    ctx.moveTo(pa.x * videoWidth * scale - offsetX, pa.y * videoHeight * scale - offsetY);
+    ctx.lineTo(pb.x * videoWidth * scale - offsetX, pb.y * videoHeight * scale - offsetY);
+    ctx.stroke();
+  });
+}
+
+function drawCustomLandmarks(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  color: string,
+  radius: number,
+  canvas: HTMLCanvasElement,
+  videoWidth: number,
+  videoHeight: number
+) {
+  ctx.fillStyle = color;
+
+  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
+  const offsetX = (videoWidth * scale - canvas.width) / 2;
+  const offsetY = (videoHeight * scale - canvas.height) / 2;
+
+  landmarks.forEach((lm) => {
+    ctx.beginPath();
+    ctx.arc(
+      lm.x * videoWidth * scale - offsetX,
+      lm.y * videoHeight * scale - offsetY,
+      radius,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  });
+}
+
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
-import {
-  PushupDetector,
-  POSE_LANDMARK_NAMES,
-  UNIMPORTANT_LANDMARKS
-} from '@/lib/PushupDetector';
-import { SquatDetector } from '@/lib/SquatDetector';
+import { PushupDetector, UNIMPORTANT_LANDMARKS, PushupState } from '@/lib/PushupDetector';
+import { SquatDetector, SquatState } from '@/lib/SquatDetector';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
@@ -78,11 +133,15 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
   const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
-  const [hideUnimportant, setHideUnimportant] = useState(false);
+  const [showRelevantPoints, setShowRelevantPoints] = useState(false);
+  const [showLines, setShowLines] = useState(true);
+  const [showAngles, setShowAngles] = useState(false);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [poseType, setPoseType] = useState<PoseKind>('unknown');
+  const [heightFeedback, setHeightFeedback] = useState('');
   
   const { toast } = useToast();
 
@@ -137,11 +196,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
       setVideoReady(true);
       
-      // Update canvas size immediately
-      if (canvasRef.current) {
-        canvasRef.current.width = video.videoWidth;
-        canvasRef.current.height = video.videoHeight;
-        console.log('Canvas size set to:', video.videoWidth, 'x', video.videoHeight);
+      if (canvasRef.current && overlayRef.current) {
+        const rect = overlayRef.current.getBoundingClientRect();
+        canvasRef.current.width = rect.width;
+        canvasRef.current.height = rect.height;
+        console.log('Canvas size set to:', rect.width, 'x', rect.height);
       }
       
       toast({
@@ -361,9 +420,40 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             setSessionTime(currentTime);
           }
 
-          // Update pose results for skeleton drawing and model status
-          setPoseResults(detectorRef.current.getLandmarks());
+          const landmarks = detectorRef.current.getLandmarks();
+          setPoseResults(landmarks);
           setModelReady(detectorRef.current.isReady());
+
+          const type = classifyPose(landmarks);
+          setPoseType(type);
+          if (type === 'pushup') {
+            const state = detectorRef.current.getState();
+            const angle = detectorRef.current.getLastAngle();
+            const upT = detectorRef.current.getUpAngleThreshold();
+            const downT = detectorRef.current.getDownAngleThreshold();
+            if (state === PushupState.Down) {
+              setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
+            } else if (state === PushupState.Up) {
+              setHeightFeedback(angle > upT ? 'Hoch genug' : 'Höher');
+            } else {
+              setHeightFeedback('');
+            }
+          } else if (type === 'squat') {
+            const sDet = squatDetectorRef.current;
+            const state = sDet.getState();
+            const angle = sDet.getLastAngle();
+            const upT = sDet.getUpAngleThreshold();
+            const downT = sDet.getDownAngleThreshold();
+            if (state === SquatState.Down) {
+              setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
+            } else if (state === SquatState.Up) {
+              setHeightFeedback(angle > upT ? 'Hoch genug' : 'Höher');
+            } else {
+              setHeightFeedback('');
+            }
+          } else {
+            setHeightFeedback('');
+          }
         }
 
         animationRef.current = requestAnimationFrame(animate);
@@ -398,51 +488,92 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         if (!ctx) return;
 
         const canvas = canvasRef.current;
-        if (canvas.width !== videoDimensions.width || canvas.height !== videoDimensions.height) {
-          canvas.width = videoDimensions.width;
-          canvas.height = videoDimensions.height;
+        const { clientWidth, clientHeight } = canvas;
+        if (canvas.width !== clientWidth || canvas.height !== clientHeight) {
+          canvas.width = clientWidth;
+          canvas.height = clientHeight;
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const mirroredPose = pose.map((lm) => ({ ...lm, x: 1 - lm.x }));
 
-        const connections = hideUnimportant
+        const connections = showRelevantPoints
           ? POSE_CONNECTIONS.filter(([a, b]) =>
               !UNIMPORTANT_LANDMARKS.includes(a) && !UNIMPORTANT_LANDMARKS.includes(b)
             )
           : POSE_CONNECTIONS;
 
-        const landmarksToDraw = hideUnimportant
+        const landmarksToDraw = showRelevantPoints
           ? mirroredPose.filter((_, idx) => !UNIMPORTANT_LANDMARKS.includes(idx))
           : mirroredPose;
 
-        if (drawConnectors && drawLandmarks) {
-          drawConnectors(ctx, mirroredPose, connections, {
-            color: '#00FF00',
-            lineWidth: 3,
-          });
-          drawLandmarks(ctx, landmarksToDraw, {
-            color: '#FF0000',
-            lineWidth: 2,
-          });
-        }
+        const scale = Math.max(
+          canvas.width / videoDimensions.width,
+          canvas.height / videoDimensions.height
+        );
+        const offsetX = (videoDimensions.width * scale - canvas.width) / 2;
+        const offsetY = (videoDimensions.height * scale - canvas.height) / 2;
 
-        mirroredPose.forEach((lm, idx) => {
-          if (hideUnimportant && UNIMPORTANT_LANDMARKS.includes(idx)) return;
-          const x = lm.x * canvas.width;
-          const y = lm.y * canvas.height;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '10px Arial';
-          ctx.fillText(POSE_LANDMARK_NAMES[idx] || `${idx}`, x + 4, y - 4);
-        });
-
-        if (drawLandmarks) {
-          [11, 12].forEach((i) =>
-            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#FF00FF', radius: 6 })
+        if (showLines) {
+          drawCustomConnectors(
+            ctx,
+            mirroredPose,
+            connections,
+            '#00FF00',
+            5,
+            canvas,
+            videoDimensions.width,
+            videoDimensions.height
           );
-          [23, 24].forEach((i) =>
-            drawLandmarks!(ctx, [mirroredPose[i]], { color: '#00FFFF', radius: 6 })
+        }
+        drawCustomLandmarks(
+          ctx,
+          landmarksToDraw,
+          '#00FF00',
+          8,
+          canvas,
+          videoDimensions.width,
+          videoDimensions.height
+        );
+
+        if (showAngles) {
+          const calculateAngle = (
+            a: NormalizedLandmark,
+            b: NormalizedLandmark,
+            c: NormalizedLandmark
+          ) => {
+            const ab = { x: a.x - b.x, y: a.y - b.y };
+            const cb = { x: c.x - b.x, y: c.y - b.y };
+            const dot = ab.x * cb.x + ab.y * cb.y;
+            const magAB = Math.hypot(ab.x, ab.y);
+            const magCB = Math.hypot(cb.x, cb.y);
+            const angle = Math.acos(dot / (magAB * magCB));
+            return (angle * 180) / Math.PI;
+          };
+
+          const leftAngle = calculateAngle(
+            mirroredPose[11],
+            mirroredPose[13],
+            mirroredPose[15]
+          );
+          const rightAngle = calculateAngle(
+            mirroredPose[12],
+            mirroredPose[14],
+            mirroredPose[16]
+          );
+
+          ctx.fillStyle = '#00FF00';
+          ctx.font = '10px Arial';
+          ctx.fillText(
+            `${Math.round(leftAngle)}`,
+            mirroredPose[13].x * videoDimensions.width * scale - offsetX + 4,
+            mirroredPose[13].y * videoDimensions.height * scale - offsetY - 4
+          );
+          ctx.fillText(
+            `${Math.round(rightAngle)}`,
+            mirroredPose[14].x * videoDimensions.width * scale - offsetX + 4,
+            mirroredPose[14].y * videoDimensions.height * scale - offsetY - 4
           );
         }
 
@@ -465,7 +596,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [showSkeleton, videoDimensions, hideUnimportant, modelReady]);
+  }, [showSkeleton, videoDimensions, showRelevantPoints, showLines, showAngles, modelReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -538,6 +669,16 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant="outline" className="bg-white/90">
                     Skelett: {showSkeleton ? 'AN' : 'AUS'}
                   </Badge>
+                  {poseType !== 'unknown' && (
+                    <Badge variant="outline" className="bg-white/90">
+                      Pose: {poseType === 'pushup' ? 'Liegestütz' : 'Kniebeuge'}
+                    </Badge>
+                  )}
+                  {heightFeedback && (
+                    <Badge variant="outline" className="bg-white/90">
+                      {heightFeedback}
+                    </Badge>
+                  )}
                   {isTracking && (
                     <Badge variant="outline" className="bg-white/90">
                       Zeit: {formatTime(sessionTime)}
@@ -567,9 +708,23 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                       <Slash className="h-4 w-4" />
-                      <span className="text-sm">Unwichtige Punkte</span>
+                      <span className="text-sm">Relevante Punkte</span>
                     </div>
-                    <Switch checked={hideUnimportant} onCheckedChange={setHideUnimportant} />
+                    <Switch checked={showRelevantPoints} onCheckedChange={setShowRelevantPoints} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Slash className="h-4 w-4" />
+                      <span className="text-sm">Linien</span>
+                    </div>
+                    <Switch checked={showLines} onCheckedChange={setShowLines} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Slash className="h-4 w-4" />
+                      <span className="text-sm">Winkel</span>
+                    </div>
+                    <Switch checked={showAngles} onCheckedChange={setShowAngles} />
                   </div>
                 </div>
 
@@ -728,11 +883,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Warte bis das Pose-Modell geladen ist (Status: "Model: Bereit")</li>
             <li>• Nutze den Zoom-Slider um die Kameraansicht anzupassen</li>
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
-            <li>• Rote/gelbe Punkte zeigen erkannte Körperteile, grüne Linien das Skelett</li>
-            <li>• Magenta Punkte = Schultern, Cyan Punkte = Hüfte (wichtig für Liegestützen)</li>
-            <li>• Aktivere "Unwichtige Punkte ausblenden" um Gesicht und Finger zu verbergen</li>
-            <li>• Gezählt wird nur, wenn mindestens ein Beinpunkt (Knie oder Fuß) sichtbar ist</li>
+            <li>• Grüne Punkte markieren erkannte Körperteile</li>
+            <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
+            <li>• Strecke die Arme ganz durch, damit eine Wiederholung gewertet wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>
         </div>

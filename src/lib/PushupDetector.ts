@@ -53,7 +53,7 @@ export const UNIMPORTANT_LANDMARKS = [
 ];
 
 export enum PushupState {
-  WaitingForUp,
+  Unknown,
   Up,
   Down,
 }
@@ -61,17 +61,26 @@ export enum PushupState {
 export class PushupDetector {
   private pose: PoseInstance | null = null;
   private initPromise: Promise<void>;
-  private state: PushupState = PushupState.WaitingForUp;
+  private state: PushupState = PushupState.Unknown;
   private count = 0;
-  private legSeen = false;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
+  private upAngleThreshold = 160;
+  private downAngleThreshold = 100;
+  private lastAvgAngle = 0;
+  private smoothedAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
-  constructor(requiredUpFrames = 5) {
+  constructor(
+    requiredUpFrames = 3,
+    upAngleThreshold = 160,
+    downAngleThreshold = 100
+  ) {
     this.requiredUpFrames = requiredUpFrames;
+    this.upAngleThreshold = upAngleThreshold;
+    this.downAngleThreshold = downAngleThreshold;
     this.initPromise = this.initPose();
   }
 
@@ -164,23 +173,19 @@ export class PushupDetector {
       return;
     }
 
-    const legVisible = [
-      leftHip,
-      rightHip,
-      leftKnee,
-      rightKnee,
-      leftAnkle,
-      rightAnkle,
-      leftFoot,
-      rightFoot
-    ].some((lm) => lm && (lm.visibility ?? 0) > 0.3);
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    const isUpFrame = avgAngle > 160 && legVisible;
-    const isDownFrame = avgAngle < 100;
+    // Apply simple smoothing to reduce jitter
+    this.smoothedAngle = this.smoothedAngle * 0.8 + avgAngle * 0.2;
+    this.lastAvgAngle = this.smoothedAngle;
+
+    const isUpFrame =
+      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
+    const isDownFrame =
+      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
@@ -189,27 +194,21 @@ export class PushupDetector {
     }
 
     switch (this.state) {
-      case PushupState.WaitingForUp: {
-        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
-          this.state = PushupState.Up;
-          this.consecutiveUpFrames = 0;
-        }
+      case PushupState.Unknown: {
+        this.state = isUpFrame ? PushupState.Up : PushupState.Down;
+        this.consecutiveUpFrames = 0;
         break;
       }
       case PushupState.Up: {
-        if (isDownFrame && legVisible) {
+        if (isDownFrame) {
           this.state = PushupState.Down;
-          this.legSeen = true;
         }
         break;
       }
       case PushupState.Down: {
         if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
           this.state = PushupState.Up;
-          if (this.legSeen) {
-            this.count++;
-          }
-          this.legSeen = false;
+          this.count++;
           this.consecutiveUpFrames = 0;
         }
         break;
@@ -219,10 +218,11 @@ export class PushupDetector {
 
   reset() {
     this.count = 0;
-    this.state = PushupState.WaitingForUp;
-    this.legSeen = false;
+    this.state = PushupState.Unknown;
     this.consecutiveUpFrames = 0;
     this.landmarks = null;
+    this.lastAvgAngle = 0;
+    this.smoothedAngle = 0;
   }
 
   getCount() {
@@ -231,6 +231,22 @@ export class PushupDetector {
 
   getLandmarks() {
     return this.landmarks;
+  }
+
+  getState() {
+    return this.state;
+  }
+
+  getLastAngle() {
+    return this.lastAvgAngle;
+  }
+
+  getUpAngleThreshold() {
+    return this.upAngleThreshold;
+  }
+
+  getDownAngleThreshold() {
+    return this.downAngleThreshold;
   }
 
   isReady() {
