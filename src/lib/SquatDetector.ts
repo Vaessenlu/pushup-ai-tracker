@@ -17,13 +17,19 @@ export class SquatDetector {
   private initPromise: Promise<void>;
   private state: SquatState = SquatState.Unknown;
   private count = 0;
+  private consecutiveUpFrames = 0;
+  private consecutiveDownFrames = 0;
+  private requiredUpFrames: number;
+  private requiredDownFrames: number;
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private isInitialized = false;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
 
-  constructor() {
+  constructor(requiredUpFrames = 2, requiredDownFrames = 2) {
+    this.requiredUpFrames = requiredUpFrames;
+    this.requiredDownFrames = requiredDownFrames;
     this.initPromise = this.initPose();
   }
 
@@ -90,19 +96,42 @@ export class SquatDetector {
 
     this.lastAvgAngle = avg;
 
+    const isUpFrame = avg > this.upAngleThreshold;
+    const isDownFrame = avg < this.downAngleThreshold;
+
+    if (isUpFrame) {
+      this.consecutiveUpFrames++;
+    } else {
+      this.consecutiveUpFrames = 0;
+    }
+
+    if (isDownFrame) {
+      this.consecutiveDownFrames++;
+    } else {
+      this.consecutiveDownFrames = 0;
+    }
+
     switch (this.state) {
       case SquatState.Unknown:
-        this.state = avg > this.upAngleThreshold ? SquatState.Up : SquatState.Down;
+        if (this.consecutiveUpFrames >= this.requiredUpFrames) {
+          this.state = SquatState.Up;
+          this.consecutiveUpFrames = 0;
+        } else if (this.consecutiveDownFrames >= this.requiredDownFrames) {
+          this.state = SquatState.Down;
+          this.consecutiveDownFrames = 0;
+        }
         break;
       case SquatState.Up:
-        if (avg < this.downAngleThreshold) {
+        if (this.consecutiveDownFrames >= this.requiredDownFrames) {
           this.state = SquatState.Down;
+          this.consecutiveDownFrames = 0;
         }
         break;
       case SquatState.Down:
-        if (avg > this.upAngleThreshold) {
+        if (this.consecutiveUpFrames >= this.requiredUpFrames) {
           this.state = SquatState.Up;
           this.count++;
+          this.consecutiveUpFrames = 0;
         }
         break;
     }
@@ -111,6 +140,8 @@ export class SquatDetector {
   reset() {
     this.count = 0;
     this.state = SquatState.Unknown;
+    this.consecutiveUpFrames = 0;
+    this.consecutiveDownFrames = 0;
     this.landmarks = null;
     this.lastAvgAngle = 0;
   }
