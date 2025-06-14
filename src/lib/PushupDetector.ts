@@ -64,7 +64,9 @@ export class PushupDetector {
   private state: PushupState = PushupState.Unknown;
   private count = 0;
   private consecutiveUpFrames = 0;
+  private consecutiveDownFrames = 0;
   private requiredUpFrames: number;
+  private requiredDownFrames: number;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
   private lastAvgAngle = 0;
@@ -75,10 +77,12 @@ export class PushupDetector {
 
   constructor(
     requiredUpFrames = 3,
+    requiredDownFrames = 2,
     upAngleThreshold = 160,
     downAngleThreshold = 100
   ) {
     this.requiredUpFrames = requiredUpFrames;
+    this.requiredDownFrames = requiredDownFrames;
     this.upAngleThreshold = upAngleThreshold;
     this.downAngleThreshold = downAngleThreshold;
     this.initPromise = this.initPose();
@@ -182,15 +186,19 @@ export class PushupDetector {
     this.smoothedAngle = this.smoothedAngle * 0.8 + avgAngle * 0.2;
     this.lastAvgAngle = this.smoothedAngle;
 
-    const isUpFrame =
-      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
-    const isDownFrame =
-      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
+    const isUpFrame = this.smoothedAngle > this.upAngleThreshold;
+    const isDownFrame = this.smoothedAngle < this.downAngleThreshold;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
     } else {
       this.consecutiveUpFrames = 0;
+    }
+
+    if (isDownFrame) {
+      this.consecutiveDownFrames++;
+    } else {
+      this.consecutiveDownFrames = 0;
     }
 
     switch (this.state) {
@@ -200,13 +208,14 @@ export class PushupDetector {
         break;
       }
       case PushupState.Up: {
-        if (isDownFrame) {
+        if (this.consecutiveDownFrames >= this.requiredDownFrames) {
           this.state = PushupState.Down;
+          this.consecutiveDownFrames = 0;
         }
         break;
       }
       case PushupState.Down: {
-        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
+        if (this.consecutiveUpFrames >= this.requiredUpFrames) {
           this.state = PushupState.Up;
           this.count++;
           this.consecutiveUpFrames = 0;
@@ -220,6 +229,7 @@ export class PushupDetector {
     this.count = 0;
     this.state = PushupState.Unknown;
     this.consecutiveUpFrames = 0;
+    this.consecutiveDownFrames = 0;
     this.landmarks = null;
     this.lastAvgAngle = 0;
     this.smoothedAngle = 0;
