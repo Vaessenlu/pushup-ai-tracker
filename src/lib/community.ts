@@ -192,7 +192,14 @@ export async function fetchHighscores(
   if (exercise) query = query.or(
     `exercise.eq.${exercise},exercise_type.eq.${exercise}`
   );
-  let { data, error } = await query;
+  let data;
+  let error: { message?: string; code?: string } | null = null;
+  try {
+    ({ data, error } = await query);
+  } catch (err) {
+    console.error('Error fetching highscores', err);
+    error = { message: (err as Error).message, code: '' };
+  }
 
   if (error) {
     const msg = error.message || '';
@@ -213,9 +220,15 @@ export async function fetchHighscores(
         fallbackQuery = fallbackQuery.or(
           `exercise.eq.${exercise},exercise_type.eq.${exercise}`
         );
-      const fallback = await fallbackQuery;
-      data = fallback.data;
-      error = fallback.error;
+      try {
+        const fallback = await fallbackQuery;
+        data = fallback.data;
+        error = fallback.error;
+      } catch (e) {
+        console.error('Fallback highscore query failed', e);
+        data = null;
+        error = { message: (e as Error).message, code: '' };
+      }
     }
 
     if (error) {
