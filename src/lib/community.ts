@@ -189,9 +189,7 @@ export async function fetchHighscores(
     .from('sessions')
     .select('user_id, username, count, created_at, exercise_type, exercise')
     .gte('created_at', iso);
-  if (exercise) query = query.or(
-    `exercise.eq.${exercise},exercise_type.eq.${exercise}`
-  );
+  if (exercise) query = query.eq('exercise_type', exercise);
   let data;
   let error: { message?: string; code?: string } | null = null;
   try {
@@ -216,10 +214,13 @@ export async function fetchHighscores(
         .from('sessions')
         .select('user_id, count, created_at')
         .gte('created_at', iso);
-      if (exercise)
-        fallbackQuery = fallbackQuery.or(
-          `exercise.eq.${exercise},exercise_type.eq.${exercise}`
-        );
+      if (exercise) {
+        if (msg.includes('exercise_type')) {
+          fallbackQuery = fallbackQuery.eq('exercise', exercise);
+        } else {
+          fallbackQuery = fallbackQuery.eq('exercise_type', exercise);
+        }
+      }
       try {
         const fallback = await fallbackQuery;
         data = fallback.data;
