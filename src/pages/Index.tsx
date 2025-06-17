@@ -123,7 +123,7 @@ const Index: React.FC<IndexProps> = ({ user }) => {
       }
     }
     load();
-  }, [user?.id]);
+  }, [user]);
 
 
   const handleSessionComplete = async (session: Omit<Session, 'id'>) => {

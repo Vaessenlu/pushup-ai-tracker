@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
+import { drawCustomConnectors, drawCustomLandmarks } from '@/lib/drawing';
 
 import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
 
@@ -40,61 +41,6 @@ function classifyPose(landmarks: NormalizedLandmark[] | null): PoseKind {
 }
 
 // Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
-function drawCustomConnectors(
-  ctx: CanvasRenderingContext2D,
-  landmarks: NormalizedLandmark[],
-  connections: readonly [number, number][],
-  color: string,
-  lineWidth: number,
-  canvas: HTMLCanvasElement,
-  videoWidth: number,
-  videoHeight: number
-) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-
-  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
-  const offsetX = (videoWidth * scale - canvas.width) / 2;
-  const offsetY = (videoHeight * scale - canvas.height) / 2;
-
-  connections.forEach(([a, b]) => {
-    const pa = landmarks[a];
-    const pb = landmarks[b];
-    if (!pa || !pb) return;
-    ctx.beginPath();
-    ctx.moveTo(pa.x * videoWidth * scale - offsetX, pa.y * videoHeight * scale - offsetY);
-    ctx.lineTo(pb.x * videoWidth * scale - offsetX, pb.y * videoHeight * scale - offsetY);
-    ctx.stroke();
-  });
-}
-
-function drawCustomLandmarks(
-  ctx: CanvasRenderingContext2D,
-  landmarks: NormalizedLandmark[],
-  color: string,
-  radius: number,
-  canvas: HTMLCanvasElement,
-  videoWidth: number,
-  videoHeight: number
-) {
-  ctx.fillStyle = color;
-
-  const scale = Math.max(canvas.width / videoWidth, canvas.height / videoHeight);
-  const offsetX = (videoWidth * scale - canvas.width) / 2;
-  const offsetY = (videoHeight * scale - canvas.height) / 2;
-
-  landmarks.forEach((lm) => {
-    ctx.beginPath();
-    ctx.arc(
-      lm.x * videoWidth * scale - offsetX,
-      lm.y * videoHeight * scale - offsetY,
-      radius,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-  });
-}
 
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
 import { PushupDetector, UNIMPORTANT_LANDMARKS, PushupState } from '@/lib/PushupDetector';
