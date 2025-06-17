@@ -247,7 +247,7 @@ export async function fetchHighscores(
       let totalCount = 0;
 
       local.forEach(r => {
-        const name = r.username?.trim() || r.email || r.user_id || 'Unbekannt';
+        const name = r.username?.trim() || r.email || 'Unbekannt';
         const key = name.toLowerCase();
         totalCount += r.count;
         const existing = totals.get(key);
@@ -266,11 +266,10 @@ export async function fetchHighscores(
   let totalCount = 0;
 
   (data || []).forEach(r => {
-    const uid = (r as Record<string, unknown>).user_id as string | undefined;
     const name =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
-        : uid || 'Unbekannt';
+        : 'Unbekannt';
 
     const key = name.toLowerCase();
     totalCount += r.count as number;
