@@ -225,7 +225,9 @@ export async function fetchHighscores(
         return d >= start &&
           (!exercise || s.exercise === exercise || s.exercise_type === exercise);
       });
-      if (local.length === 0) throw new Error('Fehler beim Laden der Highscores');
+      if (local.length === 0) {
+        return { scores: [], total: 0 };
+      }
 
       const totals = new Map<string, { name: string; count: number }>();
       let totalCount = 0;
