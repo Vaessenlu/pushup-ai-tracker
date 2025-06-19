@@ -189,10 +189,15 @@ export async function fetchHighscores(
     .from('sessions')
     .select('user_id, username, count, created_at, exercise_type, exercise')
     .gte('created_at', iso);
-  if (exercise) query = query.or(
-    `exercise.eq.${exercise},exercise_type.eq.${exercise}`
-  );
-  let { data, error } = await query;
+  if (exercise) query = query.eq('exercise_type', exercise);
+  let data;
+  let error: { message?: string; code?: string } | null = null;
+  try {
+    ({ data, error } = await query);
+  } catch (err) {
+    console.error('Error fetching highscores', err);
+    error = { message: (err as Error).message, code: '' };
+  }
 
   if (error) {
     const msg = error.message || '';
@@ -209,13 +214,22 @@ export async function fetchHighscores(
         .from('sessions')
         .select('user_id, count, created_at')
         .gte('created_at', iso);
-      if (exercise)
-        fallbackQuery = fallbackQuery.or(
-          `exercise.eq.${exercise},exercise_type.eq.${exercise}`
-        );
-      const fallback = await fallbackQuery;
-      data = fallback.data;
-      error = fallback.error;
+      if (exercise) {
+        if (msg.includes('exercise_type')) {
+          fallbackQuery = fallbackQuery.eq('exercise', exercise);
+        } else {
+          fallbackQuery = fallbackQuery.eq('exercise_type', exercise);
+        }
+      }
+      try {
+        const fallback = await fallbackQuery;
+        data = fallback.data;
+        error = fallback.error;
+      } catch (e) {
+        console.error('Fallback highscore query failed', e);
+        data = null;
+        error = { message: (e as Error).message, code: '' };
+      }
     }
 
     if (error) {
@@ -225,13 +239,15 @@ export async function fetchHighscores(
         return d >= start &&
           (!exercise || s.exercise === exercise || s.exercise_type === exercise);
       });
-      if (local.length === 0) throw new Error('Fehler beim Laden der Highscores');
+      if (local.length === 0) {
+        return { scores: [], total: 0 };
+      }
 
       const totals = new Map<string, { name: string; count: number }>();
       let totalCount = 0;
 
       local.forEach(r => {
-        const name = r.username?.trim() || r.email || r.user_id || 'Unbekannt';
+        const name = r.username?.trim() || r.email || 'Unbekannt';
         const key = name.toLowerCase();
         totalCount += r.count;
         const existing = totals.get(key);
@@ -250,11 +266,10 @@ export async function fetchHighscores(
   let totalCount = 0;
 
   (data || []).forEach(r => {
-    const uid = (r as Record<string, unknown>).user_id as string | undefined;
     const name =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
-        : uid || 'Unbekannt';
+        : 'Unbekannt';
 
     const key = name.toLowerCase();
     totalCount += r.count as number;

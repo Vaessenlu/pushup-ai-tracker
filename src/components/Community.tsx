@@ -17,18 +17,38 @@ export const Community: React.FC<CommunityProps> = ({ refreshTrigger, exercise }
   const [monthlyTotal, setMonthlyTotal] = useState(0);
 
   useEffect(() => {
-    fetchHighscores('day', exercise).then((res) => {
-      setDaily(res.scores);
-      setDailyTotal(res.total);
-    });
-    fetchHighscores('week', exercise).then((res) => {
-      setWeekly(res.scores);
-      setWeeklyTotal(res.total);
-    });
-    fetchHighscores('month', exercise).then((res) => {
-      setMonthly(res.scores);
-      setMonthlyTotal(res.total);
-    });
+    fetchHighscores('day', exercise)
+      .then((res) => {
+        setDaily(res.scores);
+        setDailyTotal(res.total);
+      })
+      .catch((err) => {
+        console.error('Failed to load daily highscores', err);
+        setDaily([]);
+        setDailyTotal(0);
+      });
+
+    fetchHighscores('week', exercise)
+      .then((res) => {
+        setWeekly(res.scores);
+        setWeeklyTotal(res.total);
+      })
+      .catch((err) => {
+        console.error('Failed to load weekly highscores', err);
+        setWeekly([]);
+        setWeeklyTotal(0);
+      });
+
+    fetchHighscores('month', exercise)
+      .then((res) => {
+        setMonthly(res.scores);
+        setMonthlyTotal(res.total);
+      })
+      .catch((err) => {
+        console.error('Failed to load monthly highscores', err);
+        setMonthly([]);
+        setMonthlyTotal(0);
+      });
   }, [refreshTrigger, exercise]);
 
   const renderTable = (title: string, scores: ScoreEntry[], total: number) => (
