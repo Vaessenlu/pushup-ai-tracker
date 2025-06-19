@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Play,
   Pause,
@@ -21,24 +22,6 @@ import { Session } from '@/pages/Index';
 import { drawCustomConnectors, drawCustomLandmarks } from '@/lib/drawing';
 
 import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
-
-type PoseKind = 'pushup' | 'squat' | 'unknown';
-
-function classifyPose(landmarks: NormalizedLandmark[] | null): PoseKind {
-  if (!landmarks) return 'unknown';
-  const ls = landmarks[11];
-  const rs = landmarks[12];
-  const lh = landmarks[23];
-  const rh = landmarks[24];
-  if (!ls || !rs || !lh || !rh) return 'unknown';
-  const shoulder = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
-  const hip = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
-  const vertical = Math.abs(hip.y - shoulder.y);
-  const horizontal = Math.abs(hip.x - shoulder.x);
-  if (vertical > horizontal * 1.2) return 'squat';
-  if (horizontal > vertical * 1.2) return 'pushup';
-  return 'unknown';
-}
 
 // Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
 
@@ -74,6 +57,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [count, setCount] = useState(0);
   const [squatCount, setSquatCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
+  const [selectedExercise, setSelectedExercise] = useState<'pushup' | 'squat'>('pushup');
   const [zoom, setZoom] = useState<number[]>([1]);
   const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
   const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
@@ -86,7 +70,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const [poseType, setPoseType] = useState<PoseKind>('unknown');
   const [heightFeedback, setHeightFeedback] = useState('');
   
   const { toast } = useToast();
@@ -293,12 +276,15 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     startTimeRef.current = Date.now();
     setIsTracking(true);
     setStatus('tracking');
-    
+
     toast({
       title: "Tracking gestartet",
-      description: "Beginne mit deinen Liegestützen!",
+      description:
+        selectedExercise === 'pushup'
+          ? 'Beginne mit deinen Liegestützen!'
+          : 'Beginne mit deinen Kniebeugen!',
     });
-  }, [cameraEnabled, videoReady, modelReady, setIsTracking, toast]);
+  }, [cameraEnabled, videoReady, modelReady, selectedExercise, setIsTracking, toast]);
 
   const pauseTracking = useCallback(() => {
     setIsTracking(false);
@@ -311,35 +297,33 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     const avgTimePerRepPushup = count > 0 ? duration / count : 0;
     const avgTimePerRepSquat = squatCount > 0 ? duration / squatCount : 0;
 
-    if (count > 0) {
+    let reps = 0;
+    let avg = 0;
+    let exercise: 'pushup' | 'squat' = selectedExercise;
 
-      onSessionComplete({
-        date: new Date(),
-        count,
-        duration,
-        avgTimePerRep: avgTimePerRepPushup,
-        exercise: 'pushup',
-      });
-
-      toast({
-        title: "Session beendet!",
-        description: `${count} Liegestützen in ${duration}s absolviert!`,
-      });
+    if (selectedExercise === 'pushup') {
+      reps = count;
+      avg = avgTimePerRepPushup;
+    } else {
+      reps = squatCount;
+      avg = avgTimePerRepSquat;
     }
 
-    if (squatCount > 0) {
-
+    if (reps > 0) {
       onSessionComplete({
         date: new Date(),
-        count: squatCount,
+        count: reps,
         duration,
-        avgTimePerRep: avgTimePerRepSquat,
-        exercise: 'squat',
+        avgTimePerRep: avg,
+        exercise,
       });
 
       toast({
         title: 'Session beendet!',
-        description: `${squatCount} Kniebeugen in ${duration}s absolviert!`,
+        description:
+          selectedExercise === 'pushup'
+            ? `${reps} Liegestützen in ${duration}s absolviert!`
+            : `${reps} Kniebeugen in ${duration}s absolviert!`,
       });
     }
 
@@ -348,7 +332,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setCount(0);
     setSquatCount(0);
     setSessionTime(0);
-  }, [count, squatCount, onSessionComplete, setIsTracking, toast]);
+  }, [count, squatCount, selectedExercise, onSessionComplete, setIsTracking, toast]);
 
   // Animation loop for pose detection
   useEffect(() => {
@@ -358,8 +342,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           const newCount = await detectorRef.current.detect(videoRef.current);
           const newSquat = await squatDetectorRef.current.detect(videoRef.current);
           if (isTracking) {
-            setCount(newCount);
-            setSquatCount(newSquat);
+            if (selectedExercise === 'pushup') {
+              setCount(newCount);
+            } else {
+              setSquatCount(newSquat);
+            }
 
             // Update session time only while tracking
             const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
@@ -370,9 +357,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
           setPoseResults(landmarks);
           setModelReady(detectorRef.current.isReady());
 
-          const type = classifyPose(landmarks);
-          setPoseType(type);
-          if (type === 'pushup') {
+          if (selectedExercise === 'pushup') {
             const state = detectorRef.current.getState();
             const angle = detectorRef.current.getLastAngle();
             const upT = detectorRef.current.getUpAngleThreshold();
@@ -384,7 +369,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             } else {
               setHeightFeedback('');
             }
-          } else if (type === 'squat') {
+          } else if (selectedExercise === 'squat') {
             const sDet = squatDetectorRef.current;
             const state = sDet.getState();
             const angle = sDet.getLastAngle();
@@ -414,7 +399,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [cameraEnabled, isTracking, videoReady, videoDimensions]);
+  }, [cameraEnabled, isTracking, videoReady, videoDimensions, selectedExercise]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
@@ -615,11 +600,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   <Badge variant="outline" className="bg-white/90">
                     Skelett: {showSkeleton ? 'AN' : 'AUS'}
                   </Badge>
-                  {poseType !== 'unknown' && (
-                    <Badge variant="outline" className="bg-white/90">
-                      Pose: {poseType === 'pushup' ? 'Liegestütz' : 'Kniebeuge'}
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="bg-white/90">
+                    Übung: {selectedExercise === 'pushup' ? 'Liegestütz' : 'Kniebeuge'}
+                  </Badge>
                   {heightFeedback && (
                     <Badge variant="outline" className="bg-white/90">
                       {heightFeedback}
@@ -634,12 +617,15 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
                 {/* Count Display */}
                 <div className="absolute top-4 right-4 space-y-2 text-right">
-                  <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-1 rounded-full">
-                    <span className="text-lg font-bold">{count} Pushups</span>
-                  </div>
-                  <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-1 rounded-full">
-                    <span className="text-lg font-bold">{squatCount} Squats</span>
-                  </div>
+                  {selectedExercise === 'pushup' ? (
+                    <div className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-6 py-1 rounded-full">
+                      <span className="text-lg font-bold">{count} Pushups</span>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-1 rounded-full">
+                      <span className="text-lg font-bold">{squatCount} Squats</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Pose Controls */}
@@ -740,6 +726,18 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               </div>
             )}
 
+            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+              <label className="text-sm font-medium text-gray-700">Übung:</label>
+              <ToggleGroup
+                type="single"
+                value={selectedExercise}
+                onValueChange={(v) => v && setSelectedExercise(v as 'pushup' | 'squat')}
+              >
+                <ToggleGroupItem value="pushup">Liegestütz</ToggleGroupItem>
+                <ToggleGroupItem value="squat">Kniebeuge</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
           </div>
         )}
 
@@ -831,6 +829,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
             <li>• Grüne Punkte markieren erkannte Körperteile</li>
             <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
+            <li>• Wähle oben, ob Liegestütze oder Kniebeugen gezählt werden</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Strecke die Arme ganz durch, damit eine Wiederholung gewertet wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
