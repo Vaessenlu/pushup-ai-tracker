@@ -70,6 +70,8 @@ export class PushupDetector {
   private lastAvgAngle = 0;
   private smoothedAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
+  private smoothedLandmarks: PoseResults['poseLandmarks'] | null = null;
+  private smoothingFactor = 0.8;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
@@ -102,7 +104,7 @@ export class PushupDetector {
     });
 
     this.pose.setOptions({
-      modelComplexity: 0,
+      modelComplexity: 1,
       smoothLandmarks: true,
       enableSegmentation: false,
       selfieMode: false,
@@ -146,21 +148,43 @@ export class PushupDetector {
     return (angle * 180) / Math.PI;
   }
 
+  private smooth(lms: NormalizedLandmarkList) {
+    if (!this.smoothedLandmarks) {
+      this.smoothedLandmarks = lms.map((p) => ({ ...p }));
+    } else {
+      const a = this.smoothingFactor;
+      for (let i = 0; i < lms.length; i++) {
+        const prev = this.smoothedLandmarks[i];
+        const cur = lms[i];
+        prev.x = prev.x * a + cur.x * (1 - a);
+        prev.y = prev.y * a + cur.y * (1 - a);
+        prev.z = prev.z * a + cur.z * (1 - a);
+        const prevVis = prev.visibility ?? 0.5;
+        const curVis = cur.visibility ?? 0.5;
+        prev.visibility = prevVis * a + curVis * (1 - a);
+      }
+    }
+    return this.smoothedLandmarks;
+  }
+
   private processLandmarks(landmarks: NormalizedLandmarkList) {
-    const leftShoulder = landmarks[11];
-    const leftElbow = landmarks[13];
-    const leftWrist = landmarks[15];
-    const rightShoulder = landmarks[12];
-    const rightElbow = landmarks[14];
-    const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftKnee = landmarks[25];
-    const rightKnee = landmarks[26];
-    const leftAnkle = landmarks[27];
-    const rightAnkle = landmarks[28];
-    const leftFoot = landmarks[31];
-    const rightFoot = landmarks[32];
+    const smooth = this.smooth(landmarks)!;
+    this.landmarks = smooth;
+
+    const leftShoulder = smooth[11];
+    const leftElbow = smooth[13];
+    const leftWrist = smooth[15];
+    const rightShoulder = smooth[12];
+    const rightElbow = smooth[14];
+    const rightWrist = smooth[16];
+    const leftHip = smooth[23];
+    const rightHip = smooth[24];
+    const leftKnee = smooth[25];
+    const rightKnee = smooth[26];
+    const leftAnkle = smooth[27];
+    const rightAnkle = smooth[28];
+    const leftFoot = smooth[31];
+    const rightFoot = smooth[32];
 
     if (
       !leftShoulder ||
@@ -229,6 +253,7 @@ export class PushupDetector {
     this.state = PushupState.Unknown;
     this.consecutiveUpFrames = 0;
     this.landmarks = null;
+    this.smoothedLandmarks = null;
     this.lastAvgAngle = 0;
     this.smoothedAngle = 0;
   }

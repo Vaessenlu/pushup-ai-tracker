@@ -19,6 +19,8 @@ export class SquatDetector {
   private count = 0;
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
+  private smoothedLandmarks: PoseResults['poseLandmarks'] | null = null;
+  private smoothingFactor = 0.8;
   private isInitialized = false;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
@@ -41,7 +43,7 @@ export class SquatDetector {
       locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
     });
     this.pose.setOptions({
-      modelComplexity: 0,
+      modelComplexity: 1,
       smoothLandmarks: true,
       enableSegmentation: false,
       selfieMode: false,
@@ -75,13 +77,35 @@ export class SquatDetector {
     return (Math.acos(dot / (magAB * magCB)) * 180) / Math.PI;
   }
 
+  private smooth(lms: NormalizedLandmarkList) {
+    if (!this.smoothedLandmarks) {
+      this.smoothedLandmarks = lms.map((p) => ({ ...p }));
+    } else {
+      const a = this.smoothingFactor;
+      for (let i = 0; i < lms.length; i++) {
+        const prev = this.smoothedLandmarks[i];
+        const cur = lms[i];
+        prev.x = prev.x * a + cur.x * (1 - a);
+        prev.y = prev.y * a + cur.y * (1 - a);
+        prev.z = prev.z * a + cur.z * (1 - a);
+        const prevVis = prev.visibility ?? 0.5;
+        const curVis = cur.visibility ?? 0.5;
+        prev.visibility = prevVis * a + curVis * (1 - a);
+      }
+    }
+    return this.smoothedLandmarks;
+  }
+
   private processLandmarks(l: NormalizedLandmarkList) {
-    const leftHip = l[23];
-    const rightHip = l[24];
-    const leftKnee = l[25];
-    const rightKnee = l[26];
-    const leftAnkle = l[27];
-    const rightAnkle = l[28];
+    const smooth = this.smooth(l)!;
+    this.landmarks = smooth;
+
+    const leftHip = smooth[23];
+    const rightHip = smooth[24];
+    const leftKnee = smooth[25];
+    const rightKnee = smooth[26];
+    const leftAnkle = smooth[27];
+    const rightAnkle = smooth[28];
 
     if (!leftHip || !rightHip || !leftKnee || !rightKnee || !leftAnkle || !rightAnkle) {
       return;
@@ -133,6 +157,7 @@ export class SquatDetector {
     this.count = 0;
     this.state = SquatState.Unknown;
     this.landmarks = null;
+    this.smoothedLandmarks = null;
     this.lastAvgAngle = 0;
     this.consecutiveUpFrames = 0;
   }

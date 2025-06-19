@@ -299,7 +299,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     let reps = 0;
     let avg = 0;
-    let exercise: 'pushup' | 'squat' = selectedExercise;
+    const exercise: 'pushup' | 'squat' = selectedExercise;
 
     if (selectedExercise === 'pushup') {
       reps = count;
