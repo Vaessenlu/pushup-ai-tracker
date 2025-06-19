@@ -270,12 +270,45 @@ export async function fetchHighscores(
   const totals = new Map<string, { name: string; count: number }>();
   let totalCount = 0;
 
+  const idsToLookup = Array.from(
+    new Set(
+      (data || [])
+        .filter(r => (r as Record<string, unknown>).user_id && !(r as Record<string, unknown>).username)
+        .map(r => (r as Record<string, unknown>).user_id as string),
+    ),
+  );
+
+  const nameMap: Record<string, string> = {};
+  if (idsToLookup.length) {
+    try {
+      const { data: nameRows } = await supabase
+        .from('sessions')
+        .select('user_id, username, created_at')
+        .not('username', 'is', null)
+        .in('user_id', idsToLookup)
+        .order('created_at', { ascending: false });
+      (nameRows || []).forEach(row => {
+        const uid = (row as Record<string, unknown>).user_id as string | undefined;
+        const uname = (row as Record<string, unknown>).username as string | undefined;
+        if (uid && typeof uname === 'string' && uname.trim() && !nameMap[uid.toLowerCase()]) {
+          nameMap[uid.toLowerCase()] = uname.trim();
+        }
+      });
+    } catch (e) {
+      console.error('Failed to lookup usernames', e);
+    }
+  }
+
   (data || []).forEach(r => {
     const uid = (r as Record<string, unknown>).user_id as string | undefined;
-    const username =
+    let username =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
         : undefined;
+    if (!username && uid) {
+      const lookup = nameMap[uid.toLowerCase()];
+      if (lookup) username = lookup;
+    }
 
     const key = (uid || username || 'unknown').toLowerCase();
     const displayName = username || 'Unbekannt';
