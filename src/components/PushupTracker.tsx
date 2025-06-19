@@ -832,6 +832,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
             <li>• Wähle unten links im Livestream, ob Liegestütze oder Kniebeugen gezählt werden</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
+            <li>• Eine Wiederholung zählt, wenn deine Schultern unter den Ellbogen waren</li>
             <li>• Strecke die Arme ganz durch, damit eine Wiederholung gewertet wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>

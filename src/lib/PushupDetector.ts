@@ -182,10 +182,13 @@ export class PushupDetector {
     this.smoothedAngle = this.smoothedAngle * 0.8 + avgAngle * 0.2;
     this.lastAvgAngle = this.smoothedAngle;
 
-    const isUpFrame =
-      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
-    const isDownFrame =
-      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
+    const shouldersAboveElbows =
+      leftShoulder.y < leftElbow.y && rightShoulder.y < rightElbow.y;
+    const shouldersBelowElbows =
+      leftShoulder.y > leftElbow.y && rightShoulder.y > rightElbow.y;
+
+    const isUpFrame = shouldersAboveElbows;
+    const isDownFrame = shouldersBelowElbows;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
