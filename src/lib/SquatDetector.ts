@@ -22,8 +22,11 @@ export class SquatDetector {
   private isInitialized = false;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
+  private consecutiveUpFrames = 0;
+  private requiredUpFrames: number;
 
-  constructor() {
+  constructor(requiredUpFrames = 3) {
+    this.requiredUpFrames = requiredUpFrames;
     this.initPromise = this.initPose();
   }
 
@@ -90,19 +93,37 @@ export class SquatDetector {
 
     this.lastAvgAngle = avg;
 
+    const hipsAboveKnees = leftHip.y < leftKnee.y && rightHip.y < rightKnee.y;
+    const hipsBelowKnees = leftHip.y > leftKnee.y && rightHip.y > rightKnee.y;
+    const legsStraight =
+      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
+    const legsBentEnough =
+      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
+
+    const isUpFrame = hipsAboveKnees && legsStraight;
+    const isDownFrame = hipsBelowKnees && legsBentEnough;
+
+    if (isUpFrame) {
+      this.consecutiveUpFrames++;
+    } else {
+      this.consecutiveUpFrames = 0;
+    }
+
     switch (this.state) {
       case SquatState.Unknown:
-        this.state = avg > this.upAngleThreshold ? SquatState.Up : SquatState.Down;
+        this.state = isUpFrame ? SquatState.Up : SquatState.Down;
+        this.consecutiveUpFrames = 0;
         break;
       case SquatState.Up:
-        if (avg < this.downAngleThreshold) {
+        if (isDownFrame) {
           this.state = SquatState.Down;
         }
         break;
       case SquatState.Down:
-        if (avg > this.upAngleThreshold) {
+        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
           this.state = SquatState.Up;
           this.count++;
+          this.consecutiveUpFrames = 0;
         }
         break;
     }
@@ -113,6 +134,7 @@ export class SquatDetector {
     this.state = SquatState.Unknown;
     this.landmarks = null;
     this.lastAvgAngle = 0;
+    this.consecutiveUpFrames = 0;
   }
 
   getCount() {

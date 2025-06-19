@@ -187,8 +187,13 @@ export class PushupDetector {
     const shouldersBelowElbows =
       leftShoulder.y > leftElbow.y && rightShoulder.y > rightElbow.y;
 
-    const isUpFrame = shouldersAboveElbows;
-    const isDownFrame = shouldersBelowElbows;
+    const armsStraight =
+      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
+    const elbowsBentEnough =
+      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
+
+    const isUpFrame = shouldersAboveElbows && armsStraight;
+    const isDownFrame = shouldersBelowElbows && elbowsBentEnough;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
