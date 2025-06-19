@@ -58,6 +58,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [squatCount, setSquatCount] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
   const [selectedExercise, setSelectedExercise] = useState<'pushup' | 'squat'>('pushup');
+  const [repFlash, setRepFlash] = useState(false);
   const [zoom, setZoom] = useState<number[]>([1]);
   const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
   const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
@@ -71,6 +72,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [heightFeedback, setHeightFeedback] = useState('');
+  const pushupPrevRef = useRef(0);
+  const squatPrevRef = useRef(0);
+  const flashTimeout = useRef<number>();
   
   const { toast } = useToast();
 
@@ -333,6 +337,24 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     setSquatCount(0);
     setSessionTime(0);
   }, [count, squatCount, selectedExercise, onSessionComplete, setIsTracking, toast]);
+
+  useEffect(() => {
+    if (selectedExercise === 'pushup' && count > pushupPrevRef.current) {
+      setRepFlash(true);
+      if (flashTimeout.current) clearTimeout(flashTimeout.current);
+      flashTimeout.current = window.setTimeout(() => setRepFlash(false), 600);
+    }
+    pushupPrevRef.current = count;
+  }, [count, selectedExercise]);
+
+  useEffect(() => {
+    if (selectedExercise === 'squat' && squatCount > squatPrevRef.current) {
+      setRepFlash(true);
+      if (flashTimeout.current) clearTimeout(flashTimeout.current);
+      flashTimeout.current = window.setTimeout(() => setRepFlash(false), 600);
+    }
+    squatPrevRef.current = squatCount;
+  }, [squatCount, selectedExercise]);
 
   // Animation loop for pose detection
   useEffect(() => {
@@ -628,6 +650,12 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                   )}
                 </div>
 
+                {repFlash && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-green-500 text-7xl font-bold animate-pulse">✓</div>
+                  </div>
+                )}
+
                 {/* Pose Controls */}
                 <div className="absolute bottom-4 left-4 space-y-2 bg-black/60 p-3 rounded-lg">
                   <div className="flex items-center justify-between gap-4">
@@ -834,6 +862,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Eine Wiederholung zählt, wenn deine Schultern unter den Ellbogen waren</li>
             <li>• Bei Kniebeugen zählt eine Wiederholung, wenn deine Hüften unter den Knien waren</li>
+            <li>• Ein grünes Häkchen zeigt an, dass eine Wiederholung gezählt wurde</li>
             <li>• Strecke die Arme ganz durch, damit eine Wiederholung gewertet wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
           </ul>
