@@ -213,11 +213,11 @@ export class PushupDetector {
 
     const armsStraight =
       leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
-    const elbowsBentEnough =
-      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
-
     const isUpFrame = shouldersAboveElbows && armsStraight;
-    const isDownFrame = shouldersBelowElbows && elbowsBentEnough;
+    // Count a down frame as soon as shoulders drop below the elbows.
+    // Elbow angle is not considered to avoid missed reps when the user
+    // doesn't bend the arms extremely deep.
+    const isDownFrame = shouldersBelowElbows;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;

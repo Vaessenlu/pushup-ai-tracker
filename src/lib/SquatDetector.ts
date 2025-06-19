@@ -121,11 +121,10 @@ export class SquatDetector {
     const hipsBelowKnees = leftHip.y > leftKnee.y && rightHip.y > rightKnee.y;
     const legsStraight =
       leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
-    const legsBentEnough =
-      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
-
     const isUpFrame = hipsAboveKnees && legsStraight;
-    const isDownFrame = hipsBelowKnees && legsBentEnough;
+    // Consider a down frame once the hips move below the knee line. This avoids
+    // requiring a specific knee angle which previously caused missed reps.
+    const isDownFrame = hipsBelowKnees;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
