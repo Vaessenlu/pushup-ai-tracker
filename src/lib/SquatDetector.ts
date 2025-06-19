@@ -20,15 +20,21 @@ export class SquatDetector {
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private smoothedLandmarks: PoseResults['poseLandmarks'] | null = null;
-  private smoothingFactor = 0.8;
+  private smoothingFactor = 0.6;
   private isInitialized = false;
-  private upAngleThreshold = 160;
-  private downAngleThreshold = 100;
+  private upAngleThreshold = 150;
+  private downAngleThreshold = 110;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
 
-  constructor(requiredUpFrames = 1) {
+  constructor(
+    requiredUpFrames = 1,
+    upAngleThreshold = 150,
+    downAngleThreshold = 110
+  ) {
     this.requiredUpFrames = requiredUpFrames;
+    this.upAngleThreshold = upAngleThreshold;
+    this.downAngleThreshold = downAngleThreshold;
     this.initPromise = this.initPose();
   }
 
@@ -122,9 +128,11 @@ export class SquatDetector {
     const legsStraight =
       leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
     const isUpFrame = hipsAboveKnees && legsStraight;
-    // Consider a down frame once the hips move below the knee line. This avoids
-    // requiring a specific knee angle which previously caused missed reps.
-    const isDownFrame = hipsBelowKnees;
+    // Require bent knees and hip depth for the bottom position.
+    const kneesBent =
+      leftAngle < this.downAngleThreshold &&
+      rightAngle < this.downAngleThreshold;
+    const isDownFrame = hipsBelowKnees && kneesBent;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;

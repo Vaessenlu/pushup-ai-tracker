@@ -65,20 +65,20 @@ export class PushupDetector {
   private count = 0;
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
-  private upAngleThreshold = 160;
-  private downAngleThreshold = 100;
+  private upAngleThreshold = 150;
+  private downAngleThreshold = 110;
   private lastAvgAngle = 0;
   private smoothedAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private smoothedLandmarks: PoseResults['poseLandmarks'] | null = null;
-  private smoothingFactor = 0.8;
+  private smoothingFactor = 0.6;
   private isInitialized = false;
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor(
     requiredUpFrames = 1,
-    upAngleThreshold = 160,
-    downAngleThreshold = 100
+    upAngleThreshold = 150,
+    downAngleThreshold = 110
   ) {
     this.requiredUpFrames = requiredUpFrames;
     this.upAngleThreshold = upAngleThreshold;
@@ -214,10 +214,12 @@ export class PushupDetector {
     const armsStraight =
       leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
     const isUpFrame = shouldersAboveElbows && armsStraight;
-    // Count a down frame as soon as shoulders drop below the elbows.
-    // Elbow angle is not considered to avoid missed reps when the user
-    // doesn't bend the arms extremely deep.
-    const isDownFrame = shouldersBelowElbows;
+    // Require both shoulder depth and bent arms to register the bottom
+    // position. This double check prevents missed repetitions.
+    const elbowsBent =
+      leftAngle < this.downAngleThreshold &&
+      rightAngle < this.downAngleThreshold;
+    const isDownFrame = shouldersBelowElbows && elbowsBent;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
