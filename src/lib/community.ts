@@ -247,12 +247,17 @@ export async function fetchHighscores(
       let totalCount = 0;
 
       local.forEach(r => {
-        const name = r.username?.trim() || r.email || 'Unbekannt';
-        const key = name.toLowerCase();
+        const username = r.username?.trim() || undefined;
+        const key = (r.user_id || username || r.email || 'unknown').toLowerCase();
+        const displayName = username || r.email || 'Unbekannt';
         totalCount += r.count;
         const existing = totals.get(key);
-        if (existing) existing.count += r.count;
-        else totals.set(key, { name, count: r.count });
+        if (existing) {
+          existing.count += r.count;
+          if (username) existing.name = username;
+        } else {
+          totals.set(key, { name: displayName, count: r.count });
+        }
       });
 
       const scores = Array.from(totals.values())
@@ -265,17 +270,56 @@ export async function fetchHighscores(
   const totals = new Map<string, { name: string; count: number }>();
   let totalCount = 0;
 
+  const idsToLookup = Array.from(
+    new Set(
+      (data || [])
+        .filter(r => (r as Record<string, unknown>).user_id && !(r as Record<string, unknown>).username)
+        .map(r => (r as Record<string, unknown>).user_id as string),
+    ),
+  );
+
+  const nameMap: Record<string, string> = {};
+  if (idsToLookup.length) {
+    try {
+      const { data: nameRows } = await supabase
+        .from('sessions')
+        .select('user_id, username, created_at')
+        .not('username', 'is', null)
+        .in('user_id', idsToLookup)
+        .order('created_at', { ascending: false });
+      (nameRows || []).forEach(row => {
+        const uid = (row as Record<string, unknown>).user_id as string | undefined;
+        const uname = (row as Record<string, unknown>).username as string | undefined;
+        if (uid && typeof uname === 'string' && uname.trim() && !nameMap[uid.toLowerCase()]) {
+          nameMap[uid.toLowerCase()] = uname.trim();
+        }
+      });
+    } catch (e) {
+      console.error('Failed to lookup usernames', e);
+    }
+  }
+
   (data || []).forEach(r => {
-    const name =
+    const uid = (r as Record<string, unknown>).user_id as string | undefined;
+    let username =
       typeof r.username === 'string' && r.username.trim()
         ? r.username.trim()
-        : 'Unbekannt';
+        : undefined;
+    if (!username && uid) {
+      const lookup = nameMap[uid.toLowerCase()];
+      if (lookup) username = lookup;
+    }
 
-    const key = name.toLowerCase();
+    const key = (uid || username || 'unknown').toLowerCase();
+    const displayName = username || 'Unbekannt';
     totalCount += r.count as number;
     const existing = totals.get(key);
-    if (existing) existing.count += r.count as number;
-    else totals.set(key, { name, count: r.count as number });
+    if (existing) {
+      existing.count += r.count as number;
+      if (username) existing.name = username;
+    } else {
+      totals.set(key, { name: displayName, count: r.count as number });
+    }
   });
 
   const scores = Array.from(totals.values())
