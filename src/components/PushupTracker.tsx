@@ -658,6 +658,18 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
                     </div>
                     <Switch checked={showAngles} onCheckedChange={setShowAngles} />
                   </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm">Übung</span>
+                    <ToggleGroup
+                      type="single"
+                      value={selectedExercise}
+                      onValueChange={(v) => v && setSelectedExercise(v as 'pushup' | 'squat')}
+                    >
+                      <ToggleGroupItem value="pushup">Liegestütz</ToggleGroupItem>
+                      <ToggleGroupItem value="squat">Kniebeuge</ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
                 </div>
 
                 {/* Stop Button */}
@@ -726,17 +738,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
               </div>
             )}
 
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-              <label className="text-sm font-medium text-gray-700">Übung:</label>
-              <ToggleGroup
-                type="single"
-                value={selectedExercise}
-                onValueChange={(v) => v && setSelectedExercise(v as 'pushup' | 'squat')}
-              >
-                <ToggleGroupItem value="pushup">Liegestütz</ToggleGroupItem>
-                <ToggleGroupItem value="squat">Kniebeuge</ToggleGroupItem>
-              </ToggleGroup>
-            </div>
 
           </div>
         )}
@@ -829,7 +830,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             <li>• Schalte die Pose-Erkennung ein um zu sehen was das System erkennt</li>
             <li>• Grüne Punkte markieren erkannte Körperteile</li>
             <li>• Aktiviere "Relevante Punkte" um nur wichtige Bereiche zu sehen</li>
-            <li>• Wähle oben, ob Liegestütze oder Kniebeugen gezählt werden</li>
+            <li>• Wähle unten links im Livestream, ob Liegestütze oder Kniebeugen gezählt werden</li>
             <li>• Führe Liegestützen mit klaren Auf- und Abwärtsbewegungen aus</li>
             <li>• Strecke die Arme ganz durch, damit eine Wiederholung gewertet wird</li>
             <li>• Für beste Ergebnisse sorge für gute Beleuchtung und einen ruhigen Hintergrund</li>
