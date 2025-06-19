@@ -76,7 +76,7 @@ export class PushupDetector {
   private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
   constructor(
-    requiredUpFrames = 3,
+    requiredUpFrames = 1,
     upAngleThreshold = 160,
     downAngleThreshold = 100
   ) {

@@ -27,7 +27,7 @@ export class SquatDetector {
   private consecutiveUpFrames = 0;
   private requiredUpFrames: number;
 
-  constructor(requiredUpFrames = 3) {
+  constructor(requiredUpFrames = 1) {
     this.requiredUpFrames = requiredUpFrames;
     this.initPromise = this.initPose();
   }
