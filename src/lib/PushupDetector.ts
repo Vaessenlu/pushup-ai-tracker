@@ -1,12 +1,5 @@
-// Pose detection and push-up counting logic
-import type {
-  Pose,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
-
-type PoseInstance = Pose;
+import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import { PoseDetectorBase } from './PoseDetectorBase';
 
 export const POSE_LANDMARK_NAMES = [
   'NOSE',
@@ -44,11 +37,8 @@ export const POSE_LANDMARK_NAMES = [
   'RIGHT_FOOT_INDEX'
 ];
 
-// Indices of landmarks not relevant for push-up detection (face & fingers)
 export const UNIMPORTANT_LANDMARKS = [
-  // face landmarks
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  // finger landmarks
   17, 18, 19, 20, 21, 22,
 ];
 
@@ -58,9 +48,7 @@ export enum PushupState {
   Down,
 }
 
-export class PushupDetector {
-  private pose: PoseInstance | null = null;
-  private initPromise: Promise<void>;
+export class PushupDetector extends PoseDetectorBase {
   private state: PushupState = PushupState.Unknown;
   private count = 0;
   private consecutiveUpFrames = 0;
@@ -70,69 +58,21 @@ export class PushupDetector {
   private lastAvgAngle = 0;
   private smoothedAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
-  private onPoseResults: ((results: PoseResults['poseLandmarks']) => void) | null = null;
 
-  constructor(
-    requiredUpFrames = 3,
-    upAngleThreshold = 160,
-    downAngleThreshold = 100
-  ) {
+  constructor(requiredUpFrames = 3, upAngleThreshold = 160, downAngleThreshold = 100) {
+    super();
     this.requiredUpFrames = requiredUpFrames;
     this.upAngleThreshold = upAngleThreshold;
     this.downAngleThreshold = downAngleThreshold;
-    this.initPromise = this.initPose();
   }
 
-  private async initPose() {
-    const mp = await import('@mediapipe/pose');
-    // The package ships as a UMD bundle which doesn't always expose the
-    // constructor via ESM exports.  Some bundlers return an empty module
-    // object on dynamic import.  Fallback to the global `Pose` if necessary.
-    const PoseCtor: typeof Pose =
-      (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
-      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
-    if (!PoseCtor) {
-      throw new Error('Failed to load Pose constructor from @mediapipe/pose');
-    }
-    this.pose = new PoseCtor({
-      locateFile: (file: string) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
-
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-        if (this.onPoseResults) {
-          this.onPoseResults(results.poseLandmarks);
-        }
-      }
-    });
+  protected handleResults(landmarks: PoseResults['poseLandmarks']) {
+    this.landmarks = landmarks;
+    this.processLandmarks(landmarks);
   }
 
-  setOnPoseResults(callback: (results: PoseResults['poseLandmarks']) => void) {
-    this.onPoseResults = callback;
-  }
-
-  async detect(videoElement: HTMLVideoElement): Promise<number> {
-    await this.initPromise;
-    if (!this.pose) return this.count;
-    if (!this.isInitialized) {
-      await this.pose.send({ image: videoElement });
-      return this.count;
-    }
-
-    await this.pose.send({ image: videoElement });
+  async detect(video: HTMLVideoElement): Promise<number> {
+    await super.detect(video);
     return this.count;
   }
 
@@ -153,39 +93,20 @@ export class PushupDetector {
     const rightShoulder = landmarks[12];
     const rightElbow = landmarks[14];
     const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftKnee = landmarks[25];
-    const rightKnee = landmarks[26];
-    const leftAnkle = landmarks[27];
-    const rightAnkle = landmarks[28];
-    const leftFoot = landmarks[31];
-    const rightFoot = landmarks[32];
 
-    if (
-      !leftShoulder ||
-      !leftElbow ||
-      !leftWrist ||
-      !rightShoulder ||
-      !rightElbow ||
-      !rightWrist
-    ) {
+    if (!leftShoulder || !leftElbow || !leftWrist || !rightShoulder || !rightElbow || !rightWrist) {
       return;
     }
-
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
     const rightAngle = this.calculateAngle(rightShoulder, rightElbow, rightWrist);
     const avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Apply simple smoothing to reduce jitter
     this.smoothedAngle = this.smoothedAngle * 0.8 + avgAngle * 0.2;
     this.lastAvgAngle = this.smoothedAngle;
 
-    const isUpFrame =
-      leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
-    const isDownFrame =
-      leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
+    const isUpFrame = leftAngle > this.upAngleThreshold && rightAngle > this.upAngleThreshold;
+    const isDownFrame = leftAngle < this.downAngleThreshold && rightAngle < this.downAngleThreshold;
 
     if (isUpFrame) {
       this.consecutiveUpFrames++;
@@ -206,10 +127,12 @@ export class PushupDetector {
         break;
       }
       case PushupState.Down: {
-        if (isUpFrame && this.consecutiveUpFrames >= this.requiredUpFrames) {
-          this.state = PushupState.Up;
-          this.count++;
-          this.consecutiveUpFrames = 0;
+        if (isUpFrame) {
+          if (this.consecutiveUpFrames >= this.requiredUpFrames) {
+            this.count++;
+            this.state = PushupState.Up;
+            this.consecutiveUpFrames = 0;
+          }
         }
         break;
       }
@@ -219,18 +142,12 @@ export class PushupDetector {
   reset() {
     this.count = 0;
     this.state = PushupState.Unknown;
-    this.consecutiveUpFrames = 0;
     this.landmarks = null;
     this.lastAvgAngle = 0;
-    this.smoothedAngle = 0;
   }
 
   getCount() {
     return this.count;
-  }
-
-  getLandmarks() {
-    return this.landmarks;
   }
 
   getState() {
@@ -249,16 +166,17 @@ export class PushupDetector {
     return this.downAngleThreshold;
   }
 
+  getLandmarks() {
+    return this.landmarks;
+  }
+
   isReady() {
     return this.isInitialized;
   }
 
   cleanup() {
-    if (this.pose) {
-      this.pose.reset();
-    }
+    super.cleanup();
   }
 }
 
 export type { PoseResults };
-
