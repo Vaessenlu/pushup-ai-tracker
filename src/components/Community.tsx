@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { fetchHighscores, ScoreEntry, HighscoreResult } from '@/lib/community';
-
+import type { ExerciseType } from '@/types/exercise';
 
 interface CommunityProps {
   refreshTrigger: number;
-  exercise: 'pushup' | 'squat';
+  exercise: ExerciseType;
 }
 
 export const Community: React.FC<CommunityProps> = ({ refreshTrigger, exercise }) => {

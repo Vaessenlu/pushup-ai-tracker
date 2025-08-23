@@ -19,32 +19,14 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/pages/Index';
 import { drawCustomConnectors, drawCustomLandmarks } from '@/lib/drawing';
-
-import type { Results as PoseResults, NormalizedLandmark } from '@mediapipe/pose';
-
-type PoseKind = 'pushup' | 'squat' | 'unknown';
-
-function classifyPose(landmarks: NormalizedLandmark[] | null): PoseKind {
-  if (!landmarks) return 'unknown';
-  const ls = landmarks[11];
-  const rs = landmarks[12];
-  const lh = landmarks[23];
-  const rh = landmarks[24];
-  if (!ls || !rs || !lh || !rh) return 'unknown';
-  const shoulder = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
-  const hip = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
-  const vertical = Math.abs(hip.y - shoulder.y);
-  const horizontal = Math.abs(hip.x - shoulder.x);
-  if (vertical > horizontal * 1.2) return 'squat';
-  if (horizontal > vertical * 1.2) return 'pushup';
-  return 'unknown';
-}
-
-// Simple canvas drawing helpers in place of `@mediapipe/drawing_utils`
-
 import { POSE_CONNECTIONS } from '@/lib/poseConstants';
-import { PushupDetector, UNIMPORTANT_LANDMARKS, PushupState } from '@/lib/PushupDetector';
-import { SquatDetector, SquatState } from '@/lib/SquatDetector';
+import { UNIMPORTANT_LANDMARKS, PushupState } from '@/lib/PushupDetector';
+import { SquatState } from '@/lib/SquatDetector';
+import { useCamera } from '@/hooks/useCamera';
+import { useSessionTimer } from '@/hooks/useSessionTimer';
+import { useExerciseDetector } from '@/hooks/useExerciseDetector';
+import TrackingControls from '@/components/TrackingControls';
+import type { NormalizedLandmark } from '@mediapipe/pose';
 
 interface PushupTrackerProps {
   onSessionComplete: (session: Omit<Session, 'id'>) => void;
@@ -59,34 +41,44 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
   setIsTracking,
   user,
 }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const detectorRef = useRef<PushupDetector | null>(null);
-  const squatDetectorRef = useRef<SquatDetector | null>(null);
   const animationRef = useRef<number>();
-  const startTimeRef = useRef<number>(0);
 
-  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const {
+    videoRef,
+    streamRef,
+    cameraEnabled,
+    videoReady,
+    setVideoReady,
+    enableCamera,
+    disableCamera,
+    cameraZoom,
+    setCameraZoom,
+    cameraZoomRange,
+    cameraZoomSupported,
+  } = useCamera();
+  const { sessionTime, start: startTimer, pause: pauseTimer, reset: resetTimer } = useSessionTimer();
+  const {
+    detect,
+    poseResults,
+    poseType,
+    pushupCount: count,
+    squatCount,
+    modelReady,
+    pushupDetectorRef,
+    squatDetectorRef,
+    reset,
+  } = useExerciseDetector();
+
   const [status, setStatus] = useState<'ready' | 'tracking' | 'paused'>('ready');
-  const [videoReady, setVideoReady] = useState(false);
-  const [count, setCount] = useState(0);
-  const [squatCount, setSquatCount] = useState(0);
-  const [sessionTime, setSessionTime] = useState(0);
   const [zoom, setZoom] = useState<number[]>([1]);
-  const [cameraZoom, setCameraZoom] = useState<number[]>([1]);
-  const [cameraZoomRange, setCameraZoomRange] = useState({ min: 0.5, max: 1 });
-  const [cameraZoomSupported, setCameraZoomSupported] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [showRelevantPoints, setShowRelevantPoints] = useState(false);
   const [showLines, setShowLines] = useState(true);
   const [showAngles, setShowAngles] = useState(false);
-  const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
-  const [modelReady, setModelReady] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const [poseType, setPoseType] = useState<PoseKind>('unknown');
   const [heightFeedback, setHeightFeedback] = useState('');
   
   const { toast } = useToast();
@@ -114,25 +106,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Initialize pose detector
-  useEffect(() => {
-    const detector = new PushupDetector();
-    detector.setOnPoseResults((results) => {
-      setPoseResults(results);
-      setModelReady(true);
-    });
-    detectorRef.current = detector;
-    return () => {
-      detector.cleanup();
-    };
-  }, []);
-
-  // Initialize squat detector
-  useEffect(() => {
-    const detector = new SquatDetector();
-    squatDetectorRef.current = detector;
-    return () => detector.cleanup();
-  }, []);
+  // detectors are handled by useExerciseDetector hook
 
   // Handle video metadata loaded
   const handleVideoLoadedMetadata = useCallback(() => {
@@ -192,80 +166,10 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
   }, [cameraZoom, cameraZoomSupported]);
 
-  const enableCamera = useCallback(async () => {
-    try {
-      console.log('Requesting camera access...');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        }
-      });
-
-      console.log('Camera stream obtained successfully');
-      streamRef.current = stream;
-      setCameraEnabled(true);
-
-      const track = stream.getVideoTracks()[0];
-      const caps = track.getCapabilities ? (track.getCapabilities() as MediaTrackCapabilities) : undefined;
-      if (caps && 'zoom' in caps) {
-        setCameraZoomSupported(true);
-        const settings = track.getSettings();
-        const minZoom = Math.min(0.5, caps.zoom!.min!);
-        setCameraZoomRange({ min: minZoom, max: caps.zoom!.max! });
-        const initialZoom = typeof settings.zoom === 'number' ? settings.zoom : minZoom;
-        setCameraZoom([initialZoom]);
-        try {
-          await track.applyConstraints({ advanced: [{ zoom: initialZoom }] });
-        } catch (err) {
-          console.error('Failed to apply initial zoom', err);
-        }
-      } else {
-        setCameraZoomSupported(false);
-      }
-
-    } catch (error) {
-      console.error('Camera access error:', error);
-      setCameraEnabled(false);
-      setVideoReady(false);
-      streamRef.current = null;
-      toast({
-        title: "Kamera-Fehler",
-        description: "Konnte nicht auf die Kamera zugreifen. Bitte Berechtigung erteilen.",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
 
 
 
 
-  const disableCamera = useCallback(() => {
-    console.log('Disabling camera...');
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log('Camera track stopped');
-      });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch((err) => {
-        console.error('Failed to exit fullscreen', err);
-      });
-    }
-    setCameraEnabled(false);
-    setVideoReady(false);
-    setCameraZoomSupported(false);
-    setCameraZoom([1]);
-    setCameraZoomRange({ min: 0.5, max: 1 });
-    setIsTracking(false);
-    setStatus('ready');
-  }, [setIsTracking]);
 
   const startTracking = useCallback(() => {
     if (!cameraEnabled || !videoReady) {
@@ -285,12 +189,9 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
     }
 
 
-    detectorRef.current?.reset();
-    squatDetectorRef.current?.reset();
-    setCount(0);
-    setSquatCount(0);
-    setSessionTime(0);
-    startTimeRef.current = Date.now();
+    reset();
+    resetTimer();
+    startTimer();
     setIsTracking(true);
     setStatus('tracking');
     
@@ -298,16 +199,36 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       title: "Tracking gestartet",
       description: "Beginne mit deinen Liegestützen!",
     });
-  }, [cameraEnabled, videoReady, modelReady, setIsTracking, toast]);
+  }, [cameraEnabled, videoReady, modelReady, setIsTracking, toast, resetTimer, startTimer, reset]);
 
   const pauseTracking = useCallback(() => {
+    pauseTimer();
     setIsTracking(false);
     setStatus('paused');
-  }, [setIsTracking]);
+  }, [setIsTracking, pauseTimer]);
+
+  const handleStart = useCallback(() => {
+    if (status === 'paused') {
+      setIsTracking(true);
+      setStatus('tracking');
+      startTimer();
+    } else {
+      startTracking();
+    }
+  }, [status, startTracking, setIsTracking, startTimer]);
+
+  const handleDisableCamera = useCallback(() => {
+    disableCamera();
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsTracking(false);
+    setStatus('ready');
+  }, [disableCamera, setIsTracking]);
 
   const stopTracking = useCallback(async () => {
-    const endTime = Date.now();
-    const duration = Math.round((endTime - startTimeRef.current) / 1000);
+    pauseTimer();
+    const duration = sessionTime;
     const avgTimePerRepPushup = count > 0 ? duration / count : 0;
     const avgTimePerRepSquat = squatCount > 0 ? duration / squatCount : 0;
 
@@ -345,38 +266,23 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     setIsTracking(false);
     setStatus('ready');
-    setCount(0);
-    setSquatCount(0);
-    setSessionTime(0);
-  }, [count, squatCount, onSessionComplete, setIsTracking, toast]);
+    reset();
+    resetTimer();
+  }, [count, squatCount, onSessionComplete, setIsTracking, toast, pauseTimer, resetTimer, sessionTime, reset]);
 
   // Animation loop for pose detection
   useEffect(() => {
     if (cameraEnabled && videoRef.current && videoReady && videoDimensions.width > 0) {
       const animate = async () => {
-        if (videoRef.current && detectorRef.current && squatDetectorRef.current) {
-          const newCount = await detectorRef.current.detect(videoRef.current);
-          const newSquat = await squatDetectorRef.current.detect(videoRef.current);
-          if (isTracking) {
-            setCount(newCount);
-            setSquatCount(newSquat);
+        if (videoRef.current) {
+          await detect(videoRef.current);
 
-            // Update session time only while tracking
-            const currentTime = Math.round((Date.now() - startTimeRef.current) / 1000);
-            setSessionTime(currentTime);
-          }
-
-          const landmarks = detectorRef.current.getLandmarks();
-          setPoseResults(landmarks);
-          setModelReady(detectorRef.current.isReady());
-
-          const type = classifyPose(landmarks);
-          setPoseType(type);
-          if (type === 'pushup') {
-            const state = detectorRef.current.getState();
-            const angle = detectorRef.current.getLastAngle();
-            const upT = detectorRef.current.getUpAngleThreshold();
-            const downT = detectorRef.current.getDownAngleThreshold();
+          const type = poseType;
+          if (type === 'pushup' && pushupDetectorRef.current) {
+            const state = pushupDetectorRef.current.getState();
+            const angle = pushupDetectorRef.current.getLastAngle();
+            const upT = pushupDetectorRef.current.getUpAngleThreshold();
+            const downT = pushupDetectorRef.current.getDownAngleThreshold();
             if (state === PushupState.Down) {
               setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
             } else if (state === PushupState.Up) {
@@ -384,12 +290,11 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             } else {
               setHeightFeedback('');
             }
-          } else if (type === 'squat') {
-            const sDet = squatDetectorRef.current;
-            const state = sDet.getState();
-            const angle = sDet.getLastAngle();
-            const upT = sDet.getUpAngleThreshold();
-            const downT = sDet.getDownAngleThreshold();
+          } else if (type === 'squat' && squatDetectorRef.current) {
+            const state = squatDetectorRef.current.getState();
+            const angle = squatDetectorRef.current.getLastAngle();
+            const upT = squatDetectorRef.current.getUpAngleThreshold();
+            const downT = squatDetectorRef.current.getDownAngleThreshold();
             if (state === SquatState.Down) {
               setHeightFeedback(angle < downT ? 'Tief genug' : 'Tiefer');
             } else if (state === SquatState.Up) {
@@ -405,7 +310,6 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         animationRef.current = requestAnimationFrame(animate);
       };
 
-      console.log('Starting pose detection animation loop');
       animationRef.current = requestAnimationFrame(animate);
     }
 
@@ -414,7 +318,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [cameraEnabled, isTracking, videoReady, videoDimensions]);
+  }, [cameraEnabled, videoReady, videoDimensions, detect, poseType]);
 
   // Draw pose landmarks and connections on canvas
   useEffect(() => {
@@ -428,7 +332,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     let frameId: number;
     const draw = () => {
-      const pose = detectorRef.current?.getLandmarks();
+      const pose = poseResults;
       if (pose && canvasRef.current && videoDimensions.width > 0) {
         const ctx = canvasRef.current.getContext('2d');
         if (!ctx) return;
@@ -542,7 +446,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [showSkeleton, videoDimensions, showRelevantPoints, showLines, showAngles, modelReady]);
+  }, [showSkeleton, videoDimensions, showRelevantPoints, showLines, showAngles, modelReady, poseResults]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -553,7 +457,7 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
-      detectorRef.current?.cleanup();
+      pushupDetectorRef.current?.cleanup();
       squatDetectorRef.current?.cleanup();
     };
   }, []);
@@ -755,67 +659,27 @@ export const PushupTracker: React.FC<PushupTrackerProps> = ({
             </Button>
           ) : (
             <>
-              <Button 
-                variant="outline" 
-                onClick={disableCamera}
+              <Button
+                variant="outline"
+                onClick={handleDisableCamera}
               >
                 <CameraOff className="h-4 w-4 mr-2" />
                 Kamera aus
               </Button>
-              
-              {status === 'ready' && videoReady && modelReady && (
-                <Button 
-                  onClick={startTracking}
-                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Start
-                </Button>
-              )}
-              
+
               {status === 'ready' && (!videoReady || !modelReady) && (
-                <Button 
-                  disabled
-                  variant="outline"
-                >
+                <Button disabled variant="outline">
                   {!videoReady ? 'Video lädt...' : 'Model lädt...'}
                 </Button>
               )}
-              
-              {status === 'tracking' && (
-                <Button 
-                  onClick={() => {
-                    setIsTracking(false);
-                    setStatus('paused');
-                  }}
-                  variant="outline"
-                >
-                  <Pause className="h-4 w-4 mr-2" />
-                  Pause
-                </Button>
-              )}
-              
-              {(status === 'tracking' || status === 'paused') && (
-                <Button 
-                  onClick={stopTracking}
-                  variant="destructive"
-                >
-                  <Square className="h-4 w-4 mr-2" />
-                  Stop
-                </Button>
-              )}
-              
-              {status === 'paused' && (
-                <Button 
-                  onClick={() => {
-                    setIsTracking(true);
-                    setStatus('tracking');
-                  }}
-                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Fortsetzen
-                </Button>
+
+              {videoReady && modelReady && (
+                <TrackingControls
+                  status={status}
+                  onStart={handleStart}
+                  onPause={pauseTracking}
+                  onReset={stopTracking}
+                />
               )}
             </>
           )}
