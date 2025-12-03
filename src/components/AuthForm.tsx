@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { isUsernameTaken } from '@/lib/community';
+import { isUsernameTaken } from '@/lib/community/server';
 
 export default function AuthForm({ onAuth }: { onAuth: () => void }) {
   const [email, setEmail] = useState('');

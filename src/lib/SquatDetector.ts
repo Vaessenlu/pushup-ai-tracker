@@ -1,10 +1,4 @@
-// Pose detection and squat counting logic
-import type {
-  Pose,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
+import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
 
 export enum SquatState {
   Unknown,
@@ -13,55 +7,12 @@ export enum SquatState {
 }
 
 export class SquatDetector {
-  private pose: Pose | null = null;
-  private initPromise: Promise<void>;
   private state: SquatState = SquatState.Unknown;
   private count = 0;
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
-
-  constructor() {
-    this.initPromise = this.initPose();
-  }
-
-  private async initPose() {
-    const mp = await import('@mediapipe/pose');
-    const PoseCtor: typeof Pose =
-      (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
-      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
-    if (!PoseCtor) throw new Error('Failed to load Pose constructor');
-    this.pose = new PoseCtor({
-      locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
-    });
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-      }
-    });
-  }
-
-  async detect(video: HTMLVideoElement): Promise<number> {
-    await this.initPromise;
-    if (!this.pose) return this.count;
-    if (!this.isInitialized) {
-      await this.pose.send({ image: video });
-      return this.count;
-    }
-    await this.pose.send({ image: video });
-    return this.count;
-  }
 
   private angle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
     const ab = { x: a.x - b.x, y: a.y - b.y };
@@ -72,7 +23,7 @@ export class SquatDetector {
     return (Math.acos(dot / (magAB * magCB)) * 180) / Math.PI;
   }
 
-  private processLandmarks(l: NormalizedLandmarkList) {
+  processLandmarks(l: NormalizedLandmarkList) {
     const leftHip = l[23];
     const rightHip = l[24];
     const leftKnee = l[25];
@@ -81,7 +32,7 @@ export class SquatDetector {
     const rightAnkle = l[28];
 
     if (!leftHip || !rightHip || !leftKnee || !rightKnee || !leftAnkle || !rightAnkle) {
-      return;
+      return this.count;
     }
 
     const leftAngle = this.angle(leftHip, leftKnee, leftAnkle);
@@ -106,6 +57,8 @@ export class SquatDetector {
         }
         break;
     }
+
+    return this.count;
   }
 
   reset() {
@@ -139,15 +92,7 @@ export class SquatDetector {
     return this.landmarks;
   }
 
-  isReady() {
-    return this.isInitialized;
-  }
-
-  cleanup() {
-    if (this.pose) {
-      this.pose.reset();
-    }
-  }
+  cleanup() {}
 }
 
 export type { PoseResults };
