@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { Session } from '@/pages/Index';
 import { TrendingUp, Clock, Zap, Target } from 'lucide-react';
+import type { ExerciseType } from '@/types/exercise';
 
 interface StatsDisplayProps {
   sessions: Session[];
-  exercise: 'pushup' | 'squat';
+  exercise: ExerciseType;
 }
 
 export const StatsDisplay: React.FC<StatsDisplayProps> = ({ sessions, exercise }) => {

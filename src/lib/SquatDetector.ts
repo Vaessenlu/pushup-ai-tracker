@@ -1,10 +1,5 @@
-// Pose detection and squat counting logic
-import type {
-  Pose,
-  Results as PoseResults,
-  NormalizedLandmark,
-  NormalizedLandmarkList
-} from '@mediapipe/pose';
+import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import { PoseDetectorBase } from './PoseDetectorBase';
 
 export enum SquatState {
   Unknown,
@@ -12,54 +7,21 @@ export enum SquatState {
   Down,
 }
 
-export class SquatDetector {
-  private pose: Pose | null = null;
-  private initPromise: Promise<void>;
+export class SquatDetector extends PoseDetectorBase {
   private state: SquatState = SquatState.Unknown;
   private count = 0;
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
-  private isInitialized = false;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
 
-  constructor() {
-    this.initPromise = this.initPose();
-  }
-
-  private async initPose() {
-    const mp = await import('@mediapipe/pose');
-    const PoseCtor: typeof Pose =
-      (mp as unknown as { Pose?: typeof Pose }).Pose ??
-      (mp as { default?: { Pose: typeof Pose } }).default?.Pose ??
-      (globalThis as unknown as { Pose?: typeof Pose }).Pose;
-    if (!PoseCtor) throw new Error('Failed to load Pose constructor');
-    this.pose = new PoseCtor({
-      locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
-    });
-    this.pose.setOptions({
-      modelComplexity: 0,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      selfieMode: false,
-    });
-    this.pose.onResults((results) => {
-      if (results.poseLandmarks) {
-        if (!this.isInitialized) this.isInitialized = true;
-        this.landmarks = results.poseLandmarks;
-        this.processLandmarks(results.poseLandmarks);
-      }
-    });
+  protected handleResults(landmarks: PoseResults['poseLandmarks']) {
+    this.landmarks = landmarks;
+    this.processLandmarks(landmarks);
   }
 
   async detect(video: HTMLVideoElement): Promise<number> {
-    await this.initPromise;
-    if (!this.pose) return this.count;
-    if (!this.isInitialized) {
-      await this.pose.send({ image: video });
-      return this.count;
-    }
-    await this.pose.send({ image: video });
+    await super.detect(video);
     return this.count;
   }
 
@@ -144,9 +106,7 @@ export class SquatDetector {
   }
 
   cleanup() {
-    if (this.pose) {
-      this.pose.reset();
-    }
+    super.cleanup();
   }
 }
 
