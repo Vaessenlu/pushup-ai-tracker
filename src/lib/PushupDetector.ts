@@ -86,7 +86,7 @@ export class PushupDetector extends PoseDetectorBase {
     return (angle * 180) / Math.PI;
   }
 
-  private processLandmarks(landmarks: NormalizedLandmarkList) {
+  processLandmarks(landmarks: NormalizedLandmarkList) {
     const leftShoulder = landmarks[11];
     const leftElbow = landmarks[13];
     const leftWrist = landmarks[15];
@@ -137,6 +137,8 @@ export class PushupDetector extends PoseDetectorBase {
         break;
       }
     }
+
+    return this.count;
   }
 
   reset() {

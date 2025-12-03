@@ -34,7 +34,7 @@ export class SquatDetector extends PoseDetectorBase {
     return (Math.acos(dot / (magAB * magCB)) * 180) / Math.PI;
   }
 
-  private processLandmarks(l: NormalizedLandmarkList) {
+  processLandmarks(l: NormalizedLandmarkList) {
     const leftHip = l[23];
     const rightHip = l[24];
     const leftKnee = l[25];
@@ -43,7 +43,7 @@ export class SquatDetector extends PoseDetectorBase {
     const rightAnkle = l[28];
 
     if (!leftHip || !rightHip || !leftKnee || !rightKnee || !leftAnkle || !rightAnkle) {
-      return;
+      return this.count;
     }
 
     const leftAngle = this.angle(leftHip, leftKnee, leftAnkle);
@@ -68,6 +68,8 @@ export class SquatDetector extends PoseDetectorBase {
         }
         break;
     }
+
+    return this.count;
   }
 
   reset() {
