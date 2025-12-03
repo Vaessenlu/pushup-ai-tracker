@@ -1,4 +1,5 @@
 import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import { PoseDetectorBase } from './PoseDetectorBase';
 
 export enum SquatState {
   Unknown,
@@ -6,13 +7,23 @@ export enum SquatState {
   Down,
 }
 
-export class SquatDetector {
+export class SquatDetector extends PoseDetectorBase {
   private state: SquatState = SquatState.Unknown;
   private count = 0;
   private lastAvgAngle = 0;
   private landmarks: PoseResults['poseLandmarks'] | null = null;
   private upAngleThreshold = 160;
   private downAngleThreshold = 100;
+
+  protected handleResults(landmarks: PoseResults['poseLandmarks']) {
+    this.landmarks = landmarks;
+    this.processLandmarks(landmarks);
+  }
+
+  async detect(video: HTMLVideoElement): Promise<number> {
+    await super.detect(video);
+    return this.count;
+  }
 
   private angle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
     const ab = { x: a.x - b.x, y: a.y - b.y };
@@ -92,7 +103,13 @@ export class SquatDetector {
     return this.landmarks;
   }
 
-  cleanup() {}
+  isReady() {
+    return this.isInitialized;
+  }
+
+  cleanup() {
+    super.cleanup();
+  }
 }
 
 export type { PoseResults };

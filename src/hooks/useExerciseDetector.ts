@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PushupDetector } from '@/lib/PushupDetector';
 import { SquatDetector } from '@/lib/SquatDetector';
-import { PoseDetectorBase } from '@/lib/PoseDetectorBase';
 import { classifyPose } from '@/lib/classifyPose';
 import type { ExerciseType } from '@/types/exercise';
 import type { Results as PoseResults } from '@mediapipe/pose';
 
 export function useExerciseDetector() {
-  const poseDetectorRef = useRef<PoseDetectorBase | null>(null);
   const pushupDetectorRef = useRef<PushupDetector | null>(null);
   const squatDetectorRef = useRef<SquatDetector | null>(null);
   const [poseResults, setPoseResults] = useState<PoseResults['poseLandmarks'] | null>(null);
@@ -17,35 +15,31 @@ export function useExerciseDetector() {
   const [modelReady, setModelReady] = useState(false);
 
   useEffect(() => {
-    const poseDetector = new PoseDetectorBase();
-    poseDetectorRef.current = poseDetector;
-    const pushup = new PushupDetector();
-    const squat = new SquatDetector();
-    pushupDetectorRef.current = pushup;
-    squatDetectorRef.current = squat;
-
-    poseDetector.setOnPoseResults((results) => {
+    const detector = new PushupDetector();
+    detector.setOnPoseResults((results) => {
       setPoseResults(results);
       setModelReady(true);
       setPoseType(classifyPose(results));
-      setPushupCount(pushup.processLandmarks(results));
-      setSquatCount(squat.processLandmarks(results));
     });
-
+    pushupDetectorRef.current = detector;
+    const squat = new SquatDetector();
+    squatDetectorRef.current = squat;
     return () => {
-      poseDetector.cleanup();
+      detector.cleanup();
+      squat.cleanup();
     };
   }, []);
 
   const detect = useCallback(async (video: HTMLVideoElement) => {
-    await poseDetectorRef.current?.detect(video);
+    const pushups = await pushupDetectorRef.current?.detect(video);
+    const squats = await squatDetectorRef.current?.detect(video);
+    if (typeof pushups === 'number') setPushupCount(pushups);
+    if (typeof squats === 'number') setSquatCount(squats);
   }, []);
 
   const reset = useCallback(() => {
     pushupDetectorRef.current?.reset();
     squatDetectorRef.current?.reset();
-    setModelReady(false);
-    setPoseType('unknown');
     setPushupCount(0);
     setSquatCount(0);
   }, []);

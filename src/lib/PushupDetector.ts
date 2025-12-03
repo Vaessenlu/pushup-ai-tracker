@@ -1,4 +1,5 @@
 import type { Results as PoseResults, NormalizedLandmark, NormalizedLandmarkList } from '@mediapipe/pose';
+import { PoseDetectorBase } from './PoseDetectorBase';
 
 export const POSE_LANDMARK_NAMES = [
   'NOSE',
@@ -47,7 +48,7 @@ export enum PushupState {
   Down,
 }
 
-export class PushupDetector {
+export class PushupDetector extends PoseDetectorBase {
   private state: PushupState = PushupState.Unknown;
   private count = 0;
   private consecutiveUpFrames = 0;
@@ -59,9 +60,20 @@ export class PushupDetector {
   private landmarks: PoseResults['poseLandmarks'] | null = null;
 
   constructor(requiredUpFrames = 3, upAngleThreshold = 160, downAngleThreshold = 100) {
+    super();
     this.requiredUpFrames = requiredUpFrames;
     this.upAngleThreshold = upAngleThreshold;
     this.downAngleThreshold = downAngleThreshold;
+  }
+
+  protected handleResults(landmarks: PoseResults['poseLandmarks']) {
+    this.landmarks = landmarks;
+    this.processLandmarks(landmarks);
+  }
+
+  async detect(video: HTMLVideoElement): Promise<number> {
+    await super.detect(video);
+    return this.count;
   }
 
   private calculateAngle(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark) {
@@ -83,7 +95,7 @@ export class PushupDetector {
     const rightWrist = landmarks[16];
 
     if (!leftShoulder || !leftElbow || !leftWrist || !rightShoulder || !rightElbow || !rightWrist) {
-      return this.count;
+      return;
     }
 
     const leftAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
@@ -134,8 +146,6 @@ export class PushupDetector {
     this.state = PushupState.Unknown;
     this.landmarks = null;
     this.lastAvgAngle = 0;
-    this.smoothedAngle = 0;
-    this.consecutiveUpFrames = 0;
   }
 
   getCount() {
@@ -162,7 +172,13 @@ export class PushupDetector {
     return this.landmarks;
   }
 
-  cleanup() {}
+  isReady() {
+    return this.isInitialized;
+  }
+
+  cleanup() {
+    super.cleanup();
+  }
 }
 
 export type { PoseResults };
