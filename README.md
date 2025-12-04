@@ -74,7 +74,10 @@ abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
 Spaltennamen und -typen der Tabelle `sessions`.
 
 Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
-`.env` im Projektwurzelverzeichnis:
+`.env` im Projektwurzelverzeichnis oder tragen Sie sie direkt im Browser unter
+"Supabase-Verbindung" auf der Login-Seite ein (diese Werte werden lokal im
+Browser gespeichert, falls die ursprüngliche Datenbank – wie jüngst geschehen –
+entfernt wurde):
 
 ```
 VITE_SUPABASE_URL=<your-url>
