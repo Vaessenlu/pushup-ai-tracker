@@ -1,124 +1,6 @@
 import { supabase } from './supabaseClient';
-
-export interface CommunitySession {
-  email: string;
-  username?: string;
-  user_id?: string;
-  date: string; // ISO string
-  count: number;
-  exercise?: 'pushup' | 'squat';
-  exercise_type?: 'pushup' | 'squat';
-}
-
-const STORAGE_KEY = 'communitySessions';
-
-export function loadCommunitySessions(): CommunitySession[] {
-  if (typeof localStorage === 'undefined') return [];
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-export function saveCommunitySession(session: CommunitySession) {
-  const sessions = loadCommunitySessions();
-  sessions.push(session);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-}
-
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-}
-
-export async function isUsernameTaken(username: string): Promise<boolean> {
-  const trimmed = username.trim();
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('username')
-    .ilike('username', trimmed)
-    .limit(1);
-  if (error) return false;
-  return (
-    (data?.length ?? 0) > 0 &&
-    data.some(
-      r =>
-        typeof r.username === 'string' &&
-        r.username.trim().toLowerCase() === trimmed.toLowerCase(),
-    )
-  );
-}
-
-export async function saveSessionServer(
-  tokens: AuthTokens,
-  session: Omit<CommunitySession, 'email' | 'username'>,
-  providedUsername?: string,
-) {
-  if (tokens) {
-    await supabase.auth.setSession(tokens);
-  }
-  const current = await supabase.auth.getSession();
-  if (!current.data.session) throw new Error('Nicht eingeloggt');
-
-  const { data: userData } = await supabase.auth.getUser();
-  const email = userData.user?.email;
-  const userId = userData.user?.id;
-  const metaUsername = (userData.user?.user_metadata as { username?: string })?.username;
-  const username = providedUsername || metaUsername;
-  if (!email && !userId) throw new Error('Kein Benutzer gefunden');
-
-  if (providedUsername && providedUsername !== metaUsername) {
-    if (await isUsernameTaken(providedUsername)) {
-      throw new Error('Benutzername bereits vergeben');
-    }
-    await supabase.auth.updateUser({ data: { username: providedUsername } });
-  }
-
-  const insertData: Record<string, unknown> = {
-    user_id: userId,
-    username,
-    created_at: session.date,
-    count: session.count,
-  };
-  if (session.exercise) {
-    insertData.exercise = session.exercise;
-    insertData.exercise_type = session.exercise;
-  }
-
-  let { error } = await supabase.from('sessions').insert(insertData);
-  if (error) {
-    const base = { count: session.count };
-    const variants: Record<string, unknown>[] = [
-      { user_id: userId, username, created_at: session.date, exercise_type: session.exercise, ...base },
-      { user_id: userId, created_at: session.date, exercise_type: session.exercise, ...base },
-      { user_id: userId, exercise_type: session.exercise, ...base },
-      { username, created_at: session.date, exercise_type: session.exercise, ...base },
-      { username, exercise_type: session.exercise, ...base },
-      { exercise_type: session.exercise, ...base },
-      base,
-    ];
-    for (const variant of variants) {
-      const res = await supabase.from('sessions').insert(variant);
-      if (!res.error) {
-        error = undefined;
-        break;
-      }
-      error = res.error;
-    }
-    if (error) throw error;
-  }
-
-  saveCommunitySession({
-    email: email || '',
-    username: username || undefined,
-    user_id: userId,
-    date: session.date,
-    count: session.count,
-    exercise: session.exercise,
-    exercise_type: session.exercise,
-  });
-}
+import { loadCommunitySessions } from './community/localStorage';
+import type { ExerciseType } from '@/types/exercise';
 
 export interface ScoreEntry {
   name: string;
@@ -130,45 +12,9 @@ export interface HighscoreResult {
   total: number;
 }
 
-export async function register(
-  email: string,
-  password: string,
-  username: string,
-): Promise<AuthTokens> {
-  if (await isUsernameTaken(username)) {
-    throw new Error('Benutzername bereits vergeben');
-  }
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { username } },
-  });
-  if (error || !data.session) {
-    throw new Error('Registrierung fehlgeschlagen');
-  }
-  return {
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-  };
-}
-
-export async function login(
-  email: string,
-  password: string,
-): Promise<AuthTokens> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.session) {
-    throw new Error('Login fehlgeschlagen');
-  }
-  return {
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-  };
-}
-
 export async function fetchHighscores(
   period: 'day' | 'week' | 'month',
-  exercise?: 'pushup' | 'squat'
+  exercise?: ExerciseType,
 ): Promise<HighscoreResult> {
   const now = new Date();
   let start: Date;
@@ -203,7 +49,6 @@ export async function fetchHighscores(
     const msg = error.message || '';
     const code = error.code;
 
-    // Fallback: wenn Spalte fehlt oder Query-Fehler
     if (
       msg.includes('username') ||
       msg.includes('created_at') ||
@@ -233,11 +78,12 @@ export async function fetchHighscores(
     }
 
     if (error) {
-      // No read access? fall back to local sessions
-      const local = loadCommunitySessions().filter(s => {
+      const local = loadCommunitySessions().filter((s) => {
         const d = new Date(s.date);
-        return d >= start &&
-          (!exercise || s.exercise === exercise || s.exercise_type === exercise);
+        return (
+          d >= start &&
+          (!exercise || s.exercise === exercise || s.exercise_type === exercise)
+        );
       });
       if (local.length === 0) {
         return { scores: [], total: 0 };
@@ -246,7 +92,7 @@ export async function fetchHighscores(
       const totals = new Map<string, { name: string; count: number }>();
       let totalCount = 0;
 
-      local.forEach(r => {
+      local.forEach((r) => {
         const username = r.username?.trim() || undefined;
         const key = (r.user_id || username || r.email || 'unknown').toLowerCase();
         const displayName = username || r.email || 'Unbekannt';
@@ -273,8 +119,12 @@ export async function fetchHighscores(
   const idsToLookup = Array.from(
     new Set(
       (data || [])
-        .filter(r => (r as Record<string, unknown>).user_id && !(r as Record<string, unknown>).username)
-        .map(r => (r as Record<string, unknown>).user_id as string),
+        .filter(
+          (r) =>
+            (r as Record<string, unknown>).user_id &&
+            !(r as Record<string, unknown>).username,
+        )
+        .map((r) => (r as Record<string, unknown>).user_id as string),
     ),
   );
 
@@ -287,7 +137,7 @@ export async function fetchHighscores(
         .not('username', 'is', null)
         .in('user_id', idsToLookup)
         .order('created_at', { ascending: false });
-      (nameRows || []).forEach(row => {
+      (nameRows || []).forEach((row) => {
         const uid = (row as Record<string, unknown>).user_id as string | undefined;
         const uname = (row as Record<string, unknown>).username as string | undefined;
         if (uid && typeof uname === 'string' && uname.trim() && !nameMap[uid.toLowerCase()]) {
@@ -299,7 +149,7 @@ export async function fetchHighscores(
     }
   }
 
-  (data || []).forEach(r => {
+  (data || []).forEach((r) => {
     const uid = (r as Record<string, unknown>).user_id as string | undefined;
     let username =
       typeof r.username === 'string' && r.username.trim()

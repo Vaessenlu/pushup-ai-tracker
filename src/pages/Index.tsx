@@ -15,10 +15,12 @@ import {
   CarouselNext,
 } from '@/components/ui/carousel';
 import { Activity, BarChart3, History, Target, Users } from 'lucide-react';
-import { saveCommunitySession, saveSessionServer } from '@/lib/community';
+import { saveCommunitySession } from '@/lib/community/localStorage';
+import { saveSessionServer } from '@/lib/community/server';
 import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
+import type { ExerciseType } from '@/types/exercise';
 
 export interface Session {
   id: string;
@@ -26,8 +28,8 @@ export interface Session {
   count: number;
   duration: number;
   avgTimePerRep: number;
-  exercise: 'pushup' | 'squat';
-  exercise_type?: 'pushup' | 'squat';
+  exercise: ExerciseType;
+  exercise_type?: ExerciseType;
 }
 
 interface IndexProps {
@@ -107,16 +109,12 @@ const Index: React.FC<IndexProps> = ({ user }) => {
                 ? (s.duration as number) / (s.count as number)
                 : 0,
             exercise:
-              ((s as Record<string, string | number>).exercise_type as
-                | 'pushup'
-                | 'squat') ||
-              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              ((s as Record<string, string | number>).exercise_type as ExerciseType) ||
+              ((s as Record<string, string | number>).exercise as ExerciseType) ||
               'pushup',
             exercise_type:
-              ((s as Record<string, string | number>).exercise_type as
-                | 'pushup'
-                | 'squat') ||
-              ((s as Record<string, string | number>).exercise as 'pushup' | 'squat') ||
+              ((s as Record<string, string | number>).exercise_type as ExerciseType) ||
+              ((s as Record<string, string | number>).exercise as ExerciseType) ||
               'pushup',
           }))
         );
