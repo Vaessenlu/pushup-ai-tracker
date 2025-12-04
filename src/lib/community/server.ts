@@ -5,20 +5,25 @@ import type { AuthTokens } from '@/lib/auth';
 
 export async function isUsernameTaken(username: string): Promise<boolean> {
   const trimmed = username.trim();
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('username')
-    .ilike('username', trimmed)
-    .limit(1);
-  if (error) return false;
-  return (
-    (data?.length ?? 0) > 0 &&
-    data.some(
-      (r) =>
-        typeof r.username === 'string' &&
-        r.username.trim().toLowerCase() === trimmed.toLowerCase(),
-    )
-  );
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('username')
+      .ilike('username', trimmed)
+      .limit(1);
+    if (error) return false;
+    return (
+      (data?.length ?? 0) > 0 &&
+      data.some(
+        (r) =>
+          typeof r.username === 'string' &&
+          r.username.trim().toLowerCase() === trimmed.toLowerCase(),
+      )
+    );
+  } catch (e) {
+    console.error('Supabase username lookup failed', e);
+    return false;
+  }
 }
 
 export async function saveSessionServer(
