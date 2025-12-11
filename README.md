@@ -115,6 +115,27 @@ npm run provision-supabase
 
 Das Skript ruft die Supabase Management API auf, erstellt die Tabelle `public.sessions`, setzt Row-Level-Security-Policies, legt die Hilfsfunktion `execute_sql` an (für `npm run ensure-schema`) und erteilt den Rollen `anon` und `authenticated` die nötigen Rechte für die Leaderboards.
 
+Für die neue Instanz unter `https://qetlvkurgqoastwzzlsz.supabase.co` benötigst du zusätzlich
+
+- die **Anon Key** (für die App und das Formular in `Supabase-Verbindung`),
+- den **Service Role Key** (für `npm run ensure-schema`),
+- das **Access Token** und den **Project Ref** (für `npm run provision-supabase`).
+
+Das Provisioning legt diese Spalten im `sessions`-Table an (alle optional außer `count`):
+
+- `exercise_type` / `exercise`: Übungstyp (z.B. `pushup`, `squat`, später `burpee`, `pullup`).
+- `count`: Wiederholungen.
+- `duration`: Session-Dauer in Sekunden.
+- `perceived_intensity`: subjektive Belastung (frei wählbarer Text oder Skala).
+- `device`: optionales Geräte‑Label (z.B. `iphone-15-pro-max`).
+- `camera_fps`: fps-Wert der Kamera (für Debugging/Safari-Probleme).
+- `model_version`: Pose/Classifier-Version (für spätere Modelle wie Burpees/Pull-ups).
+- `calories`: geschätzte Kalorien (falls später berechnet).
+- `notes`: freie Notizen.
+- `created_at`: Timestamp (Default `now()`).
+
+Du kannst das Schema mit `scripts/provisionSupabase.js` jederzeit erneut gegen das Projekt schicken, um fehlende Spalten oder Policies nachzuziehen.
+
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
 mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 Du meldest dich danach mit deiner E-Mail-Adresse und deinem Passwort an.

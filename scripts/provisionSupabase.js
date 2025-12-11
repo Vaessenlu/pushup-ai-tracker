@@ -40,8 +40,18 @@ create table if not exists public.sessions (
   duration integer,
   exercise_type text,
   exercise text,
+  perceived_intensity text,
+  device text,
+  camera_fps integer,
+  model_version text,
+  calories numeric,
+  notes text,
   created_at timestamptz default now()
 );
+
+-- helpful indexes for community leaderboards and filtering
+create index if not exists sessions_created_idx on public.sessions (created_at desc);
+create index if not exists sessions_exercise_type_idx on public.sessions (exercise_type);
 
 alter table public.sessions enable row level security;
 
