@@ -94,6 +94,27 @@ Neu ist die Spalte `exercise_type`, die den Typ der absolvierten Übung (z.B. `p
 
 Speichere dazu die Variable `SUPABASE_SERVICE_ROLE_KEY` in deiner `.env` und führe anschließend `npm run dev` aus.
 
+#### Komplettes Anlegen der Datenbank per API
+
+Falls deine ursprüngliche Supabase-Instanz gelöscht wurde, kannst du die benötigte Tabelle und die RLS-Policies vollständig per API anlegen:
+
+1. Erzeuge in Supabase unter **Account Settings → Tokens** ein persönliches **Access Token**.
+2. Notiere dir die **Project ID/Ref** deines neuen Projekts (z.B. `abcd1234efgh5678ijkl`).
+3. Lege eine `.env` an oder exportiere temporär:
+
+```
+SUPABASE_ACCESS_TOKEN=<dein-token>
+SUPABASE_PROJECT_ID=<dein-project-ref>
+```
+
+4. Führe das Skript aus:
+
+```
+npm run provision-supabase
+```
+
+Das Skript ruft die Supabase Management API auf, erstellt die Tabelle `public.sessions`, setzt Row-Level-Security-Policies, legt die Hilfsfunktion `execute_sql` an (für `npm run ensure-schema`) und erteilt den Rollen `anon` und `authenticated` die nötigen Rechte für die Leaderboards.
+
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
 mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
 Du meldest dich danach mit deiner E-Mail-Adresse und deinem Passwort an.
