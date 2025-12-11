@@ -1,13 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { resolveValue } from './supabaseConfig.js';
 
 dotenv.config();
 
-const url = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const url =
+  process.env.VITE_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  resolveValue(undefined, 'url', 'supabaseUrl');
+const serviceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  resolveValue(undefined, 'serviceRoleKey', 'service_key', 'serviceRole');
 
 if (!url || !serviceKey) {
-  console.log('Supabase service credentials missing. Skipping schema check.');
+  console.log(
+    'Supabase service credentials missing. Skipping schema check. Hinterlege sie in .env oder supabase.config.local.json.',
+  );
   process.exit(0);
 }
 
@@ -41,5 +51,11 @@ async function ensureColumn(name, type) {
   await ensureColumn('exercise_type', 'text');
   await ensureColumn('exercise', 'text');
   await ensureColumn('duration', 'integer');
+  await ensureColumn('perceived_intensity', 'text');
+  await ensureColumn('device', 'text');
+  await ensureColumn('camera_fps', 'integer');
+  await ensureColumn('model_version', 'text');
+  await ensureColumn('calories', 'numeric');
+  await ensureColumn('notes', 'text');
   await ensureColumn('created_at', 'timestamp with time zone DEFAULT now()');
 })();

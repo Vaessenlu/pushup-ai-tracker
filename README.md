@@ -74,7 +74,10 @@ abweichende Tabellendefinition hin – kontrolliere in diesem Fall die
 Spaltennamen und -typen der Tabelle `sessions`.
 
 Hinterlegen Sie anschließend Ihre Supabase URL und den Anon Key in einer Datei
-`.env` im Projektwurzelverzeichnis:
+`.env` im Projektwurzelverzeichnis oder tragen Sie sie direkt im Browser unter
+"Supabase-Verbindung" auf der Login-Seite ein (diese Werte werden lokal im
+Browser gespeichert, falls die ursprüngliche Datenbank – wie jüngst geschehen –
+entfernt wurde):
 
 ```
 VITE_SUPABASE_URL=<your-url>
@@ -90,6 +93,72 @@ Um sicherzustellen, dass die Tabelle `sessions` alle benötigten Spalten enthäl
 Neu ist die Spalte `exercise_type`, die den Typ der absolvierten Übung (z.B. `pushup` oder `squat`) speichert. Das Skript legt sie bei Bedarf ebenfalls an.
 
 Speichere dazu die Variable `SUPABASE_SERVICE_ROLE_KEY` in deiner `.env` und führe anschließend `npm run dev` aus.
+
+#### Komplettes Anlegen der Datenbank per API
+
+Falls deine ursprüngliche Supabase-Instanz gelöscht wurde, kannst du die benötigte Tabelle und die RLS-Policies vollständig per API anlegen:
+
+1. Erzeuge in Supabase unter **Account Settings → Tokens** ein persönliches **Access Token**.
+2. Notiere dir die **Project ID/Ref** deines neuen Projekts (z.B. `abcd1234efgh5678ijkl`).
+3. Lege eine `.env` an oder exportiere temporär:
+
+```
+SUPABASE_ACCESS_TOKEN=<dein-token>
+SUPABASE_PROJECT_ID=<dein-project-ref>
+```
+
+4. Führe das Skript aus:
+
+```
+npm run provision-supabase
+```
+
+Das Skript ruft die Supabase Management API auf, erstellt die Tabelle `public.sessions`, setzt Row-Level-Security-Policies, legt die Hilfsfunktion `execute_sql` an (für `npm run ensure-schema`) und erteilt den Rollen `anon` und `authenticated` die nötigen Rechte für die Leaderboards.
+
+Du kannst anstelle von Environment-Variablen auch eine lokale Datei `supabase.config.local.json` (wird ignoriert und bleibt damit privat) mit diesen Feldern anlegen:
+
+```json
+{
+  "url": "https://qetlvkurgqoastwzzlsz.supabase.co",
+  "anonKey": "<anon-key>",
+  "serviceRoleKey": "<service-role-key>",
+  "accessToken": "<personal-access-token>",
+  "projectRef": "qetlvkurgqoastwzzlsz"
+}
+```
+
+Kopiere dafür `supabase.config.example.json` nach `supabase.config.local.json` und ergänze die echten Keys. `npm run dev`, `npm run ensure-schema` und `npm run provision-supabase` lesen diese Datei automatisch, falls keine Umgebungsvariablen gesetzt sind.
+
+Für die neue Instanz unter `https://qetlvkurgqoastwzzlsz.supabase.co` benötigst du zusätzlich
+
+- die **Anon Key** (für die App und das Formular in `Supabase-Verbindung`),
+- den **Service Role Key** (für `npm run ensure-schema`),
+- das **Access Token** und den **Project Ref** (für `npm run provision-supabase`).
+
+Ein Beispiel für deine `.env` (oder `.env.local`):
+
+```
+VITE_SUPABASE_URL=https://qetlvkurgqoastwzzlsz.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_ACCESS_TOKEN=<personal-access-token>
+SUPABASE_PROJECT_ID=qetlvkurgqoastwzzlsz
+```
+
+Das Provisioning legt diese Spalten im `sessions`-Table an (alle optional außer `count`):
+
+- `exercise_type` / `exercise`: Übungstyp (z.B. `pushup`, `squat`, später `burpee`, `pullup`).
+- `count`: Wiederholungen.
+- `duration`: Session-Dauer in Sekunden.
+- `perceived_intensity`: subjektive Belastung (frei wählbarer Text oder Skala).
+- `device`: optionales Geräte‑Label (z.B. `iphone-15-pro-max`).
+- `camera_fps`: fps-Wert der Kamera (für Debugging/Safari-Probleme).
+- `model_version`: Pose/Classifier-Version (für spätere Modelle wie Burpees/Pull-ups).
+- `calories`: geschätzte Kalorien (falls später berechnet).
+- `notes`: freie Notizen.
+- `created_at`: Timestamp (Default `now()`).
+
+Du kannst das Schema mit `scripts/provisionSupabase.js` jederzeit erneut gegen das Projekt schicken, um fehlende Spalten oder Policies nachzuziehen.
 
 Bei der Registrierung musst du einen Benutzernamen angeben. Dieser wird zusammen
 mit deinen Sessions gespeichert und in den Community-Highscores angezeigt.
