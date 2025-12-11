@@ -115,11 +115,35 @@ npm run provision-supabase
 
 Das Skript ruft die Supabase Management API auf, erstellt die Tabelle `public.sessions`, setzt Row-Level-Security-Policies, legt die Hilfsfunktion `execute_sql` an (für `npm run ensure-schema`) und erteilt den Rollen `anon` und `authenticated` die nötigen Rechte für die Leaderboards.
 
+Du kannst anstelle von Environment-Variablen auch eine lokale Datei `supabase.config.local.json` (wird ignoriert und bleibt damit privat) mit diesen Feldern anlegen:
+
+```json
+{
+  "url": "https://qetlvkurgqoastwzzlsz.supabase.co",
+  "anonKey": "<anon-key>",
+  "serviceRoleKey": "<service-role-key>",
+  "accessToken": "<personal-access-token>",
+  "projectRef": "qetlvkurgqoastwzzlsz"
+}
+```
+
+Kopiere dafür `supabase.config.example.json` nach `supabase.config.local.json` und ergänze die echten Keys. `npm run dev`, `npm run ensure-schema` und `npm run provision-supabase` lesen diese Datei automatisch, falls keine Umgebungsvariablen gesetzt sind.
+
 Für die neue Instanz unter `https://qetlvkurgqoastwzzlsz.supabase.co` benötigst du zusätzlich
 
 - die **Anon Key** (für die App und das Formular in `Supabase-Verbindung`),
 - den **Service Role Key** (für `npm run ensure-schema`),
 - das **Access Token** und den **Project Ref** (für `npm run provision-supabase`).
+
+Ein Beispiel für deine `.env` (oder `.env.local`):
+
+```
+VITE_SUPABASE_URL=https://qetlvkurgqoastwzzlsz.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_ACCESS_TOKEN=<personal-access-token>
+SUPABASE_PROJECT_ID=qetlvkurgqoastwzzlsz
+```
 
 Das Provisioning legt diese Spalten im `sessions`-Table an (alle optional außer `count`):
 

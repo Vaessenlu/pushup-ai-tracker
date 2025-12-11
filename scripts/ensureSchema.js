@@ -1,13 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { resolveValue } from './supabaseConfig.js';
 
 dotenv.config();
 
-const url = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const url =
+  process.env.VITE_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  resolveValue(undefined, 'url', 'supabaseUrl');
+const serviceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  resolveValue(undefined, 'serviceRoleKey', 'service_key', 'serviceRole');
 
 if (!url || !serviceKey) {
-  console.log('Supabase service credentials missing. Skipping schema check.');
+  console.log(
+    'Supabase service credentials missing. Skipping schema check. Hinterlege sie in .env oder supabase.config.local.json.',
+  );
   process.exit(0);
 }
 

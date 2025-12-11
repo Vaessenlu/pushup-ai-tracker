@@ -28,4 +28,6 @@ requirements.txt
 
 # Environment
 .env
+supabase.config.json
+supabase.config.local.json
 

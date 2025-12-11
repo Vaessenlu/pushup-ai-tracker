@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
+export const DEFAULT_SUPABASE_URL = 'https://qetlvkurgqoastwzzlsz.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldGx2a3VyZ3FvYXN0d3p6bHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDE3NTUsImV4cCI6MjA4MTAxNzc1NX0.bRkM-P7FhThEEDqecUP_TMLHY4SNhk_XIUT1PsIdt5k';
+
 const OVERRIDE_URL_KEY = 'supabase_override_url';
 const OVERRIDE_ANON_KEY = 'supabase_override_anon_key';
 
@@ -24,14 +28,16 @@ const supabaseUrl =
   import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
   runtimeEnv.VITE_SUPABASE_URL ||
   runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ||
-  runtimeEnv.SUPABASE_URL;
+  runtimeEnv.SUPABASE_URL ||
+  DEFAULT_SUPABASE_URL;
 const supabaseKey =
   overrides?.anonKey ||
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   runtimeEnv.VITE_SUPABASE_ANON_KEY ||
   runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  runtimeEnv.SUPABASE_ANON_KEY;
+  runtimeEnv.SUPABASE_ANON_KEY ||
+  DEFAULT_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error(

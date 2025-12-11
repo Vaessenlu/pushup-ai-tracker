@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  DEFAULT_SUPABASE_ANON_KEY,
+  DEFAULT_SUPABASE_URL,
   clearSupabaseOverride,
   getSupabaseConfigMeta,
   setSupabaseOverride,
@@ -10,8 +12,8 @@ import {
 
 export function SupabaseConfig() {
   const meta = useMemo(() => getSupabaseConfigMeta(), []);
-  const [url, setUrl] = useState(meta.hasBrowserOverride ? meta.url : '');
-  const [anonKey, setAnonKey] = useState(meta.hasBrowserOverride ? meta.anonKey : '');
+  const [url, setUrl] = useState(meta.hasBrowserOverride ? meta.url : DEFAULT_SUPABASE_URL);
+  const [anonKey, setAnonKey] = useState(meta.hasBrowserOverride ? meta.anonKey : DEFAULT_SUPABASE_ANON_KEY);
   const [savedMessage, setSavedMessage] = useState('');
 
   const handleSave = () => {
@@ -36,7 +38,8 @@ export function SupabaseConfig() {
         <h2 className="text-lg font-semibold">Supabase-Verbindung</h2>
         <p className="text-sm text-gray-600">
           Die bisherige Datenbank ist gelöscht. Trage hier die URL und den Anon Key deiner neuen Supabase-Instanz ein
-          oder passe sie in der <code>.env</code> an. Aktuell verbunden mit: <strong>{meta.host}</strong>
+          oder passe sie in der <code>.env</code> an. Vorbefüllt ist die aktuelle Instanz
+          <code>https://qetlvkurgqoastwzzlsz.supabase.co</code>. Aktuell verbunden mit: <strong>{meta.host}</strong>
           {meta.hasBrowserOverride ? ' (Browser-Override aktiv)' : ' (Umgebungsvariable)'}.
         </p>
       </div>

@@ -1,9 +1,14 @@
 import * as dotenv from 'dotenv';
+import { resolveValue } from './supabaseConfig.js';
 
 dotenv.config();
 
-const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
-const projectRef = process.env.SUPABASE_PROJECT_ID || process.env.SUPABASE_PROJECT_REF;
+const accessToken = resolveValue(process.env.SUPABASE_ACCESS_TOKEN, 'accessToken');
+const projectRef = resolveValue(
+  process.env.SUPABASE_PROJECT_ID || process.env.SUPABASE_PROJECT_REF,
+  'projectRef',
+  'projectId',
+);
 
 if (!accessToken || !projectRef) {
   console.error('Missing SUPABASE_ACCESS_TOKEN or SUPABASE_PROJECT_ID/REF.');

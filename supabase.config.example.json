@@ -1,0 +1,7 @@
+{
+  "url": "https://qetlvkurgqoastwzzlsz.supabase.co",
+  "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldGx2a3VyZ3FvYXN0d3p6bHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDE3NTUsImV4cCI6MjA4MTAxNzc1NX0.bRkM-P7FhThEEDqecUP_TMLHY4SNhk_XIUT1PsIdt5k",
+  "serviceRoleKey": "<dein-service-role-key>",
+  "accessToken": "<dein-supabase-access-token>",
+  "projectRef": "qetlvkurgqoastwzzlsz"
+}
